@@ -29,6 +29,7 @@ uint32_t NUM_PING;
 /* Define the mempool globally */
 struct rte_mempool *mbuf_pool = NULL;
 static struct rte_ether_addr my_eth;
+uint16_t eth_port_id = 1;
 static size_t message_size = 1000;
 static uint32_t seconds = 1;
 
@@ -79,21 +80,28 @@ wrapsum(uint32_t sum)
 	return htons(sum);
 }
 
+/** 
+ * Parse a complete UDP packet. Read src IP, dst IP, payload 
+ * and payload length from mbuf packet.
+ * 
+ * @return
+ *   - (0) if not a UDP packet
+ *   - (+ve integer) denoting flow id
+ */
 static int parse_packet(struct sockaddr_in *src,
                         struct sockaddr_in *dst,
                         void **payload,
                         size_t *payload_len,
                         struct rte_mbuf *pkt)
 {
-    // packet layout order is (from outside -> in):
-    // ether_hdr
-    // ipv4_hdr
-    // udp_hdr
-    // client timestamp
+    /* 
+     * Packet layout order is (from outside -> in):
+     * ether_hdr | ipv4_hdr | udp_hdr | client timestamp
+     */
     uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
     size_t header = 0;
 
-    // check the ethernet header
+    /* Parse ethernet header. Validate dst MAC and type is IP */
     struct rte_ether_hdr * const eth_hdr = (struct rte_ether_hdr *)(p);
     p += sizeof(*eth_hdr);
     header += sizeof(*eth_hdr);
@@ -107,19 +115,17 @@ static int parse_packet(struct sockaddr_in *src,
             eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
 			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
 			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
-        return 1;
+        return 0;
     }
     if (RTE_ETHER_TYPE_IPV4 != eth_type) {
         printf("Bad ether type\n");
         return 0;
     }
 
-    // check the IP header
+    /* Parse IP header. Validate Type = UDP */
     struct rte_ipv4_hdr *const ip_hdr = (struct rte_ipv4_hdr *)(p);
     p += sizeof(*ip_hdr);
     header += sizeof(*ip_hdr);
-
-    // In network byte order.
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
@@ -131,17 +137,15 @@ static int parse_packet(struct sockaddr_in *src,
     src->sin_addr.s_addr = ipv4_src_addr;
     dst->sin_addr.s_addr = ipv4_dst_addr;
     
-    // check udp header
+    /* Parse udp header */
     struct rte_udp_hdr * const udp_hdr = (struct rte_udp_hdr *)(p);
     p += sizeof(*udp_hdr);
     header += sizeof(*udp_hdr);
 
-    // In network byte order.
     in_port_t udp_src_port = udp_hdr->src_port;
     in_port_t udp_dst_port = udp_hdr->dst_port;
     int ret = 0;
 	
-
 	uint16_t p1 = rte_cpu_to_be_16(5001);
 	uint16_t p2 = rte_cpu_to_be_16(5002);
 	uint16_t p3 = rte_cpu_to_be_16(5003);
@@ -173,7 +177,6 @@ static int parse_packet(struct sockaddr_in *src,
     *payload_len = pkt->pkt_len - header;
     *payload = (void *)p;
     return ret;
-
 }
 
 
@@ -294,6 +297,8 @@ lcore_main()
         seq[i] = 0;
     } 
 
+    double lats = 0;
+
     while (seq[flow_id] < NUM_PING) {
         // send a packet
         pkt = rte_pktmbuf_alloc(mbuf_pool);
@@ -329,7 +334,6 @@ lcore_main()
         ipv4_hdr->dst_addr = rte_cpu_to_be_32("127.0.0.1");
 
         uint32_t ipv4_checksum = wrapsum(checksum((unsigned char *)ipv4_hdr, sizeof(struct rte_ipv4_hdr), 0));
-        // printf("Checksum is %u\n", (unsigned)ipv4_checksum);
         ipv4_hdr->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
         header_size += sizeof(*ipv4_hdr);
         ptr += sizeof(*ipv4_hdr);
@@ -343,8 +347,6 @@ lcore_main()
         udp_hdr->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr) + packet_len);
 
         uint16_t udp_cksum =  rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)udp_hdr);
-
-        // printf("Udp checksum is %u\n", (unsigned)udp_cksum);
         udp_hdr->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
         ptr += sizeof(*udp_hdr);
         header_size += sizeof(*udp_hdr);
@@ -354,14 +356,10 @@ lcore_main()
 
         pkt->l2_len = RTE_ETHER_HDR_LEN;
         pkt->l3_len = sizeof(struct rte_ipv4_hdr);
-        // pkt->ol_flags = PKT_TX_IP_CKSUM | PKT_TX_IPV4;
         pkt->data_len = header_size + packet_len;
         pkt->pkt_len = header_size + packet_len;
         pkt->nb_segs = 1;
         int pkts_sent = 0;
-
-        // If you like to print
-        // unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
        
         pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
         if(pkts_sent == 1)
@@ -397,7 +395,7 @@ lcore_main()
             }
         }
 
-        // flow_id = (flow_id+1) % flow_num;
+        flow_id = (flow_id + 1) % flow_num;
     }
     printf("Sent %"PRIu64" packets.\n", reqs);
     // dump_latencies(&latency_dist);
