@@ -54,12 +54,18 @@ wrapsum(uint32_t sum)
 	return htons(sum);
 }
 
+void print_mac(struct rte_ether_addr mac) {
+    printf("MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+			" %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+        mac.addr_bytes[0], mac.addr_bytes[1],
+		mac.addr_bytes[2], mac.addr_bytes[3],
+		mac.addr_bytes[4], mac.addr_bytes[5]);
+}
+
 /*
  * Initializes a given port using global settings and with the RX buffers
  * coming from the mbuf_pool passed as a parameter.
  */
-
-/* Main functional part of port initialization. 8< */
 static inline int
 port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 {
@@ -143,8 +149,14 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 }
 /* >8 End of main functional part of port initialization. */
 
-/* Parse a complete UDP packet. */
-static int parse_udp_pkt(struct sockaddr_in *src,
+/* 
+ * Parse an Ethernet packet to check if it contains UDP packet. 
+ * 
+ * @return
+ *   - (0) if not a UDP packet
+ *   - (+ve integer) denoting flow id
+ */
+static int parse_pkt(struct sockaddr_in *src,
                         struct sockaddr_in *dst,
                         void **payload,
                         size_t *payload_len,
@@ -155,64 +167,50 @@ static int parse_udp_pkt(struct sockaddr_in *src,
      * ether_hdr | ipv4_hdr | udp_hdr | client timestamp
 	 */
     uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
-    size_t header = 0;
+    size_t header_size = 0;
 
     /* Parse Ethernet header and Validate dst MAC */
     struct rte_ether_hdr * const eth_hdr = (struct rte_ether_hdr *)(p);
     p += sizeof(*eth_hdr);
-    header += sizeof(*eth_hdr);
+    header_size += sizeof(*eth_hdr);
     uint16_t eth_type = ntohs(eth_hdr->ether_type);
     struct rte_ether_addr mac_addr = {};
 	rte_eth_macaddr_get(eth_port_id, &mac_addr);
     
 	
 	if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr) ) {
-        printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-            eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
-			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
-			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
         return 0;
     }
     if (RTE_ETHER_TYPE_IPV4 != eth_type) {
-        printf("Bad ether type\n");
         return 0;
     }
 
-    // check the IP header
+    /* Parse IP header and validate Type = UDP */
     struct rte_ipv4_hdr *const ip_hdr = (struct rte_ipv4_hdr *)(p);
     p += sizeof(*ip_hdr);
-    header += sizeof(*ip_hdr);
-
-    // In network byte order.
+    header_size += sizeof(*ip_hdr);
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
-	/* Not required */
-    // if (IPPROTO_UDP != ip_hdr->next_proto_id) {
-    //     printf("Bad next proto_id\n");
-    //     return 0;
-    // }
+    if (IPPROTO_UDP != ip_hdr->next_proto_id) {
+        return 0;
+    }
     
     src->sin_addr.s_addr = ipv4_src_addr;
     dst->sin_addr.s_addr = ipv4_dst_addr;
 
-    // check udp header
+    /* Parse UDP Header */
     struct rte_udp_hdr * const udp_hdr = (struct rte_udp_hdr *)(p);
     p += sizeof(*udp_hdr);
-    header += sizeof(*udp_hdr);
-
-    // In network byte order.
+    header_size += sizeof(*udp_hdr);
     in_port_t udp_src_port = udp_hdr->src_port;
     in_port_t udp_dst_port = udp_hdr->dst_port;
 	int ret = 0;
 	
-
 	uint16_t p1 = rte_cpu_to_be_16(5001);
 	uint16_t p2 = rte_cpu_to_be_16(5002);
 	uint16_t p3 = rte_cpu_to_be_16(5003);
 	uint16_t p4 = rte_cpu_to_be_16(5004);
-	// printf("dst port %d, %d\n", udp_hdr->dst_port, p2);
 	
 	if (udp_hdr->dst_port ==  p1)
 	{
@@ -232,24 +230,21 @@ static int parse_udp_pkt(struct sockaddr_in *src,
 	}
 
     src->sin_port = udp_src_port;
-    dst->sin_port = udp_dst_port;
-    
+    dst->sin_port = udp_dst_port;    
     src->sin_family = AF_INET;
     dst->sin_family = AF_INET;
-    
-    *payload_len = pkt->pkt_len - header;
-    *payload = (void *)p;
-    
-	return ret;
 
+    *payload_len = pkt->pkt_len - header_size;
+    *payload = (void *)p;
+	return ret;
 }
 
-/* Basic forwarding application lcore. 8< */
+/* Receive packets on Ethernet port and reply ack packet. */
 static __rte_noreturn void
 lcore_main(void)
 {
 	uint16_t port;
-	uint32_t rec_pkt_num = 0;
+	uint32_t n_pkts_rcvd = 0;
 	uint16_t nb_rx;
 
 	/*
@@ -268,12 +263,11 @@ lcore_main(void)
 	printf("\nCore %u forwarding packets. [Ctrl+C to quit]\n",
 		   rte_lcore_id());
 
-	/* Main work of application loop. 8< */
+	/* Get burst of RX packets from port1 and reply ack */ 
 	for (;;)
 	{
 		RTE_ETH_FOREACH_DEV(port)
 		{
-			/* Get burst of RX packets, from port1 */
 			if (port != 1)
 				continue;
 
@@ -289,7 +283,6 @@ lcore_main(void)
 
 			struct rte_mbuf *acks[BURST_SIZE];
 			struct rte_mbuf *ack;
-			// char *buf_ptr;
 			struct rte_ether_hdr *eth_h_ack;
 			struct rte_ipv4_hdr *ip_h_ack;
 			struct rte_udp_hdr *udp_h_ack;
@@ -299,33 +292,27 @@ lcore_main(void)
 			if (unlikely(nb_rx == 0))
 				continue;
 
-			// printf("#Packets received: %u\n", nb_rx);
-
 			for (i = 0; i < nb_rx; i++)
 			{
 				pkt = bufs[i];
 				struct sockaddr_in src, dst;
                 void *payload = NULL;
                 size_t payload_length = 0;
-                int udp_port_id = parse_udp_pkt(&src, &dst, &payload, &payload_length, pkt);
-				if(udp_port_id != 0){
-					printf("received pkt #%d\n", rec_pkt_num);
-				}
-
-				eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
-				if (eth_h->ether_type != rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4))
-				{
+                int ret_parse = parse_pkt(&src, &dst, &payload, &payload_length, pkt);
+				if(ret_parse != 0){
+					printf("Received pkt #%d\n", n_pkts_rcvd);
+				} else {
 					rte_pktmbuf_free(pkt);
 					continue;
 				}
 
+				eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
 				ip_h = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr *,
 											   sizeof(struct rte_ether_hdr));
-
 				udp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_udp_hdr *,
 											   sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) );
 				// rte_pktmbuf_dump(stdout, pkt, pkt->pkt_len);
-				rec_pkt_num++;
+				n_pkts_rcvd++;
 
 
 				// Construct and send Acks
