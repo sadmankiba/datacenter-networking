@@ -62,6 +62,10 @@ void print_mac(struct rte_ether_addr mac) {
 		mac.addr_bytes[4], mac.addr_bytes[5]);
 }
 
+void print_mbuf(struct rte_mbuf *pkt) {
+	rte_pktmbuf_dump(stdout, pkt, pkt->pkt_len);
+}
+
 /*
  * Initializes a given port using global settings and with the RX buffers
  * coming from the mbuf_pool passed as a parameter.
@@ -164,7 +168,7 @@ static int parse_pkt(struct sockaddr_in *src,
 {
     /*
 	 * Packet layout order is (from outside -> in):
-     * ether_hdr | ipv4_hdr | udp_hdr | client timestamp
+     * ether_hdr | ipv4_hdr | udp_hdr | payload
 	 */
     uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
     size_t header_size = 0;
@@ -292,6 +296,7 @@ lcore_main(void)
 			if (unlikely(nb_rx == 0))
 				continue;
 
+			/* For each packet received, add an ack packet to an array. */
 			for (i = 0; i < nb_rx; i++)
 			{
 				pkt = bufs[i];
@@ -311,11 +316,10 @@ lcore_main(void)
 											   sizeof(struct rte_ether_hdr));
 				udp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_udp_hdr *,
 											   sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) );
-				// rte_pktmbuf_dump(stdout, pkt, pkt->pkt_len);
 				n_pkts_rcvd++;
 
 
-				// Construct and send Acks
+				/* Now, construct and send an ack */
 				ack = rte_pktmbuf_alloc(mbuf_pool);
 				if (ack == NULL) {
 					printf("Error allocating tx mbuf\n");
@@ -324,16 +328,16 @@ lcore_main(void)
 				size_t header_size = 0;
 
 				uint8_t *ptr = rte_pktmbuf_mtod(ack, uint8_t *);
+				
 				/* add in an ethernet header */
 				eth_h_ack = (struct rte_ether_hdr *)ptr;
-				
 				rte_ether_addr_copy(&my_eth, &eth_h_ack->src_addr);
 				rte_ether_addr_copy(&eth_h->src_addr, &eth_h_ack->dst_addr);
 				eth_h_ack->ether_type = rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4);
 				ptr += sizeof(*eth_h_ack);
 				header_size += sizeof(*eth_h_ack);
 
-				/* add in ipv4 header*/
+				/* add in ipv4 header */
 				ip_h_ack = (struct rte_ipv4_hdr *)ptr;
 				ip_h_ack->version_ihl = 0x45;
 				ip_h_ack->type_of_service = 0x0;
@@ -349,15 +353,14 @@ lcore_main(void)
 				ip_h_ack->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
 				header_size += sizeof(*ip_h_ack);
 				ptr += sizeof(*ip_h_ack);
-				/* add in UDP hdr*/
+				
+				/* add in UDP hdr */
 				udp_h_ack = (struct rte_udp_hdr *)ptr;
 				udp_h_ack->src_port = udp_h->dst_port;
 				udp_h_ack->dst_port = udp_h->src_port;
-				udp_h_ack->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr)+ack_len);
+				udp_h_ack->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr) + ack_len);
 
 				uint16_t udp_cksum =  rte_ipv4_udptcp_cksum(ip_h_ack, (void *)udp_h_ack);
-
-				// printf("Udp checksum is %u\n", (unsigned)udp_cksum);
 				udp_h_ack->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
 				
 				/* set the payload */
@@ -367,24 +370,20 @@ lcore_main(void)
 
 				ack->l2_len = RTE_ETHER_HDR_LEN;
 				ack->l3_len = sizeof(struct rte_ipv4_hdr);
-				// pkt->ol_flags = PKT_TX_IP_CKSUM | PKT_TX_IPV4;
 				ack->data_len = header_size + ack_len;
 				ack->pkt_len = header_size + ack_len;
 				ack->nb_segs = 1;
-				int pkts_sent = 0;
 
-				unsigned char *ack_buffer = rte_pktmbuf_mtod(ack, unsigned char *);
 				acks[nb_replies++] = ack;
 				
 				rte_pktmbuf_free(bufs[i]);
 
 			}
 
-			/* Send back echo replies. */
+			/* Send back ack replies. */
 			uint16_t nb_tx = 0;
-			if (nb_replies > 0)
-			{
-				nb_tx = rte_eth_tx_burst(port, 0, acks, nb_replies);
+			if (nb_replies > 0) {
+				nb_tx += rte_eth_tx_burst(port, 0, acks, nb_replies);
 			}
 
 			/* Free any unsent packets. */
@@ -396,9 +395,7 @@ lcore_main(void)
 			}
 		}
 	}
-	/* >8 End of loop. */
 }
-/* >8 End Basic forwarding application lcore. */
 
 /*
  * The main function, which does initialization and calls the per-lcore
@@ -410,12 +407,10 @@ int main(int argc, char *argv[])
 	unsigned nb_ports = 1;
 	uint16_t portid;
 	
-	/* Initializion the Environment Abstraction Layer (EAL). 8< */
-
+	/* Initializion the Environment Abstraction Layer (EAL). */
 	int ret = rte_eal_init(argc, argv);
 	if (ret < 0)
 		rte_exit(EXIT_FAILURE, "Error with EAL initialization\n");
-	/* >8 End of initialization the Environment Abstraction Layer (EAL). */
 
 	argc -= ret;
 	argv += ret;
@@ -424,26 +419,23 @@ int main(int argc, char *argv[])
 	/* Allocates mempool to hold the mbufs. 8< */
 	mbuf_pool = rte_pktmbuf_pool_create("MBUF_POOL", NUM_MBUFS * nb_ports,
 										MBUF_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
-	/* >8 End of allocating mempool to hold mbuf. */
 
 	if (mbuf_pool == NULL)
 		rte_exit(EXIT_FAILURE, "Cannot create mbuf pool\n");
 
-	/* Initializing all ports. 8< */
+	/* Initialize port 1 */
 	RTE_ETH_FOREACH_DEV(portid) {
 		printf("%u\n", portid);
 		if (portid == 1 && port_init(portid, mbuf_pool) != 0)
 			rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n",
 					portid);
 	}
-	/* >8 End of initializing all ports. */
 
 	if (rte_lcore_count() > 1)
 		printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
 
 	/* Call lcore_main on the main core only. Called on single lcore. 8< */
 	lcore_main();
-	/* >8 End of called on single lcore. */
 
 	/* clean up the EAL */
 	rte_eal_cleanup();
