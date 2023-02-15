@@ -142,7 +142,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 }
 /* >8 End of main functional part of port initialization. */
 
-static int get_port(struct sockaddr_in *src,
+static int parse_udp_pkt(struct sockaddr_in *src,
                         struct sockaddr_in *dst,
                         void **payload,
                         size_t *payload_len,
@@ -298,7 +298,7 @@ lcore_main(void)
 			if (unlikely(nb_rx == 0))
 				continue;
 
-			printf("#Packets received: %u\n", nb_rx);
+			// printf("#Packets received: %u\n", nb_rx);
 
 			for (i = 0; i < nb_rx; i++)
 			{
@@ -306,9 +306,9 @@ lcore_main(void)
 				struct sockaddr_in src, dst;
                 void *payload = NULL;
                 size_t payload_length = 0;
-                int udp_port_id = get_port(&src, &dst, &payload, &payload_length, pkt);
+                int udp_port_id = parse_udp_pkt(&src, &dst, &payload, &payload_length, pkt);
 				if(udp_port_id != 0){
-					printf("received: %d\n", rec_pkt_num);
+					printf("received pkt #%d\n", rec_pkt_num);
 				}
 
 				eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
