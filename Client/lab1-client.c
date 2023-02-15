@@ -24,7 +24,7 @@
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
-uint32_t NUM_PING = 100;
+uint32_t NUM_PING;
 
 /* Define the mempool globally */
 struct rte_mempool *mbuf_pool = NULL;
@@ -34,9 +34,9 @@ static uint32_t seconds = 1;
 
 size_t window_len = 10;
 
-int flow_size = 10000;
+int flow_size;
 int packet_len = 1000;
-int flow_num = 1;
+int flow_num;
 
 
 static uint64_t raw_time(void) {
@@ -289,14 +289,14 @@ lcore_main()
     // TODO: add in scaffolding for timing/printing out quick statistics
     int outstanding[flow_num];
     uint16_t seq[flow_num];
-    size_t port_id = 0;
+    size_t flow_id = 0;
     for(size_t i = 0; i < flow_num; i++)
     {
         outstanding[i] = 0;
         seq[i] = 0;
     } 
 
-    while (seq[port_id] < NUM_PING) {
+    while (seq[flow_id] < NUM_PING) {
         // send a packet
         pkt = rte_pktmbuf_alloc(mbuf_pool);
         if (pkt == NULL) {
@@ -335,8 +335,8 @@ lcore_main()
 
         /* add in UDP hdr*/
         udp_hdr = (struct rte_udp_hdr *)ptr;
-        uint16_t srcp = 5001 + port_id;
-        uint16_t dstp = 5001 + port_id;
+        uint16_t srcp = 5001 + flow_id;
+        uint16_t dstp = 5001 + flow_id;
         udp_hdr->src_port = rte_cpu_to_be_16(srcp);
         udp_hdr->dst_port = rte_cpu_to_be_16(dstp);
         udp_hdr->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr) + packet_len);
@@ -364,8 +364,8 @@ lcore_main()
         pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
         if(pkts_sent == 1)
         {
-            seq[port_id]++;
-            outstanding[port_id] ++;
+            seq[flow_id]++;
+            outstanding[flow_id] ++;
         }
         
         uint64_t last_sent = rte_get_timer_cycles();
@@ -374,7 +374,7 @@ lcore_main()
         /* now poll on receiving packets */
         nb_rx = 0;
         reqs += 1;
-        while ((outstanding[port_id] > 0)) {
+        while ((outstanding[flow_id] > 0)) {
             nb_rx = rte_eth_rx_burst(1, 0, pkts, BURST_SIZE);
             if (nb_rx == 0) {
                 continue;
@@ -396,7 +396,7 @@ lcore_main()
             }
         }
 
-        // port_id = (port_id+1) % flow_num;
+        // flow_id = (flow_id+1) % flow_num;
     }
     printf("Sent %"PRIu64" packets.\n", reqs);
     // dump_latencies(&latency_dist);
