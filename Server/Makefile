@@ -16,6 +16,10 @@ endif
 
 all: shared
 .PHONY: shared static
+
+run: 
+	cd build && ./lab1-server
+
 shared: build/$(APP)-shared
 	ln -sf $(APP)-shared build/$(APP)
 static: build/$(APP)-static

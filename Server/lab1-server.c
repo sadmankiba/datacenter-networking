@@ -167,18 +167,20 @@ static int get_port(struct sockaddr_in *src,
     uint16_t eth_type = ntohs(eth_hdr->ether_type);
     struct rte_ether_addr mac_addr = {};
 	rte_eth_macaddr_get(1, &mac_addr);
-    if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr) ) {
-        printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-            eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
-			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
-			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
-        return 0;
-    }
-    if (RTE_ETHER_TYPE_IPV4 != eth_type) {
-        printf("Bad ether type\n");
-        return 0;
-    }
+    
+	/* Not required */
+	// if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr) ) {
+    //     printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+	// 		   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+    //         eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
+	// 		eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
+	// 		eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
+    //     return 0;
+    // }
+    // if (RTE_ETHER_TYPE_IPV4 != eth_type) {
+    //     printf("Bad ether type\n");
+    //     return 0;
+    // }
 
     // check the IP header
     struct rte_ipv4_hdr *const ip_hdr = (struct rte_ipv4_hdr *)(p);
@@ -189,10 +191,11 @@ static int get_port(struct sockaddr_in *src,
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
-    if (IPPROTO_UDP != ip_hdr->next_proto_id) {
-        printf("Bad next proto_id\n");
-        return 0;
-    }
+	/* Not required */
+    // if (IPPROTO_UDP != ip_hdr->next_proto_id) {
+    //     printf("Bad next proto_id\n");
+    //     return 0;
+    // }
     
     src->sin_addr.s_addr = ipv4_src_addr;
     dst->sin_addr.s_addr = ipv4_dst_addr;
@@ -257,13 +260,13 @@ lcore_main(void)
 	 * for best performance.
 	 */
 	RTE_ETH_FOREACH_DEV(port)
-	if (rte_eth_dev_socket_id(port) >= 0 &&
-		rte_eth_dev_socket_id(port) !=
-			(int)rte_socket_id())
-		printf("WARNING, port %u is on remote NUMA node to "
-			   "polling thread.\n\tPerformance will "
-			   "not be optimal.\n",
-			   port);
+		if (rte_eth_dev_socket_id(port) >= 0 &&
+			rte_eth_dev_socket_id(port) !=
+				(int)rte_socket_id())
+			printf("WARNING, port %u is on remote NUMA node to "
+				"polling thread.\n\tPerformance will "
+				"not be optimal.\n",
+				port);
 
 	printf("\nCore %u forwarding packets. [Ctrl+C to quit]\n",
 		   rte_lcore_id());
@@ -439,10 +442,12 @@ int main(int argc, char *argv[])
 		rte_exit(EXIT_FAILURE, "Cannot create mbuf pool\n");
 
 	/* Initializing all ports. 8< */
-	RTE_ETH_FOREACH_DEV(portid)
-	if (portid == 1 && port_init(portid, mbuf_pool) != 0)
-		rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n",
-				 portid);
+	RTE_ETH_FOREACH_DEV(portid) {
+		printf("%u\n", portid);
+		if (portid == 1 && port_init(portid, mbuf_pool) != 0)
+			rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n",
+					portid);
+	}
 	/* >8 End of initializing all ports. */
 
 	if (rte_lcore_count() > 1)
