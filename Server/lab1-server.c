@@ -19,16 +19,12 @@
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
-#define PORT_NUM 4
 
 struct rte_mempool *mbuf_pool = NULL;
 static struct rte_ether_addr my_eth;
 size_t window_len = 10;
 
-int flow_size = 10000;
-int packet_len = 1000;
 int ack_len = 10;
-int flow_num = 1;
 
 uint32_t
 checksum(unsigned char *buf, uint32_t nbytes, uint32_t sum)
@@ -252,7 +248,7 @@ static __rte_noreturn void
 lcore_main(void)
 {
 	uint16_t port;
-	uint32_t rec = 0;
+	uint32_t rec_pkt_num = 0;
 	uint16_t nb_rx;
 
 	/*
@@ -302,6 +298,8 @@ lcore_main(void)
 			if (unlikely(nb_rx == 0))
 				continue;
 
+			printf("#Packets received: %u\n", nb_rx);
+
 			for (i = 0; i < nb_rx; i++)
 			{
 				pkt = bufs[i];
@@ -310,7 +308,7 @@ lcore_main(void)
                 size_t payload_length = 0;
                 int udp_port_id = get_port(&src, &dst, &payload, &payload_length, pkt);
 				if(udp_port_id != 0){
-					printf("received: %d\n", rec);
+					printf("received: %d\n", rec_pkt_num);
 				}
 
 				eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
@@ -326,7 +324,7 @@ lcore_main(void)
 				udp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_udp_hdr *,
 											   sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) );
 				// rte_pktmbuf_dump(stdout, pkt, pkt->pkt_len);
-				rec++;
+				rec_pkt_num++;
 
 
 				// Construct and send Acks
