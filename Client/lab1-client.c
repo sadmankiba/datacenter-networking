@@ -40,16 +40,16 @@ int packet_len = 1000;
 int flow_num;
 
 
-static uint64_t raw_time(void) {
+static uint64_t raw_time_ns(void) {
     struct timespec tstart={0,0};
     clock_gettime(CLOCK_MONOTONIC, &tstart);
-    uint64_t t = (uint64_t)(tstart.tv_sec*1.0e9 + tstart.tv_nsec);
+    uint64_t t = (uint64_t)(tstart.tv_sec * 1.0e9 + tstart.tv_nsec);
     return t;
 
 }
 
-static uint64_t time_now(uint64_t offset) {
-    return raw_time() - offset;
+static uint64_t time_now_ns(uint64_t offset) {
+    return raw_time_ns() - offset;
 }
 
 uint32_t
@@ -80,7 +80,19 @@ wrapsum(uint32_t sum)
 	return htons(sum);
 }
 
-/** 
+void print_mac(struct rte_ether_addr mac) {
+    printf("MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+			" %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+        mac.addr_bytes[0], mac.addr_bytes[1],
+		mac.addr_bytes[2], mac.addr_bytes[3],
+		mac.addr_bytes[4], mac.addr_bytes[5]);
+}
+
+uint64_t cycles_elapsed(double timediff) {
+    return timediff * rte_get_timer_hz() / (1e9);
+}
+
+/**  
  * Parse a complete UDP packet. Read src IP, dst IP, payload 
  * and payload length from mbuf packet.
  * 
@@ -96,7 +108,7 @@ static int parse_packet(struct sockaddr_in *src,
 {
     /* 
      * Packet layout order is (from outside -> in):
-     * ether_hdr | ipv4_hdr | udp_hdr | client timestamp
+     * ether_hdr | ipv4_hdr | udp_hdr | payload
      */
     uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
     size_t header = 0;
@@ -110,15 +122,9 @@ static int parse_packet(struct sockaddr_in *src,
 
     rte_eth_macaddr_get(1, &mac_addr);
     if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr)) {
-        printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-            eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
-			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
-			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
         return 0;
     }
     if (RTE_ETHER_TYPE_IPV4 != eth_type) {
-        printf("Bad ether type\n");
         return 0;
     }
 
@@ -130,7 +136,6 @@ static int parse_packet(struct sockaddr_in *src,
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
     if (IPPROTO_UDP != ip_hdr->next_proto_id) {
-        printf("Bad next proto_id\n");
         return 0;
     }
     
@@ -274,18 +279,17 @@ lcore_main()
 {
     struct rte_mbuf *pkts_rcvd[BURST_SIZE];
     struct rte_mbuf *pkt;
-    // char *buf_ptr;
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
     struct rte_udp_hdr *udp_hdr;
 
-    // Specify the dst mac address here: 
+    /* Dst mac address */ 
     struct rte_ether_addr dst = {{0xb8, 0xce, 0xf6, 0xb0, 0x31, 0x2b}};
 
 	struct sliding_hdr *sld_h_ack;
     uint16_t nb_rx;
-    uint64_t reqs = 0;
-    // uint64_t cycle_wait = intersend_time * rte_get_timer_hz() / (1e9);
+    uint64_t n_pkts_sent = 0;
+    size_t header_size;
     
     // TODO: add in scaffolding for timing/printing out quick statistics
     int outstanding[flow_num];
@@ -297,20 +301,22 @@ lcore_main()
         seq[i] = 0;
     } 
 
-    double lats = 0;
-
+    double lat_cum = 0;
+    uint64_t flow_start_time = raw_time_ns();
+    /* In each iteration, send a packet and receive an ack. */
     while (seq[flow_id] < NUM_PING) {
-        // send a packet
         pkt = rte_pktmbuf_alloc(mbuf_pool);
         if (pkt == NULL) {
             printf("Error allocating tx mbuf\n");
             return -EINVAL;
         }
-        size_t header_size = 0;
+        header_size = 0;
 
-        /* Get a pointer to start of mbuf. Then, sequentially fill mbuf 
-         with Ethernet header, IP header, UDP header and payload. 
-         Finally, add metadata, such as l2_len and l3_len, in mbuf struct*/
+        /* 
+         * Get a pointer to start of mbuf. Then, sequentially fill mbuf 
+         * with Ethernet header, IP header, UDP header and payload. 
+         * Finally, add metadata, such as l2_len and l3_len, in mbuf struct
+         */
         uint8_t *ptr = rte_pktmbuf_mtod(pkt, uint8_t *);
         
         /* add in an ethernet header */
@@ -368,19 +374,19 @@ lcore_main()
             outstanding[flow_id]++;
         }
         
-        long unsigned int last_sent = rte_get_timer_cycles();
+        uint64_t last_sent = raw_time_ns();
         printf("Sent packet at %lu\n", last_sent);
 
         /* Now poll on receiving packets */
         nb_rx = 0;
-        reqs += 1;
+        n_pkts_sent += 1;
         while ((outstanding[flow_id] > 0)) {
             nb_rx = rte_eth_rx_burst(1, 0, pkts_rcvd, BURST_SIZE);
+            uint64_t lat = time_now_ns(last_sent);
             if (nb_rx == 0) {
                 continue;
             }
 
-            printf("Received burst of %u packets. RTT %f\n", (unsigned)nb_rx, (rte_get_timer_cycles() - last_sent) * rte_get_timer_hz() / 1e9);
             for (int i = 0; i < nb_rx; i++) {
                 struct sockaddr_in src, dst;
                 void *payload = NULL;
@@ -389,6 +395,8 @@ lcore_main()
                 if (p != 0) {
                     rte_pktmbuf_free(pkts_rcvd[i]);
                     outstanding[p-1]--;
+                    printf("lat %lu ns\n", lat);
+                    lat_cum += lat;
                 } else {
                     rte_pktmbuf_free(pkts_rcvd[i]);
                 }
@@ -397,9 +405,9 @@ lcore_main()
 
         flow_id = (flow_id + 1) % flow_num;
     }
-    printf("Sent %"PRIu64" packets.\n", reqs);
-    // dump_latencies(&latency_dist);
-    // return 0;
+    printf("Sent %"PRIu64" packets.\n", n_pkts_sent);
+    printf("Avg lat: %f us\n", (1.0 * lat_cum) / ( n_pkts_sent * 1000));
+    printf("Bw: %f Gbps\n", (1.0 * n_pkts_sent * (header_size + packet_len) * 8) / time_now_ns(flow_start_time));
 }
 /*
  * The main function, which does initialization and calls the per-lcore
