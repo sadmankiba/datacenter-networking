@@ -175,14 +175,13 @@ static int parse_packet(struct sockaddr_in *src,
     return ret;
 
 }
-/* basicfwd.c: Basic DPDK skeleton forwarding example. */
 
-/*
+
+/* From basicfwd.c: Basic DPDK skeleton forwarding example.
+ * 
  * Initializes a given port using global settings and with the RX buffers
  * coming from the mbuf_pool passed as a parameter.
  */
-
-/* Main functional part of port initialization. 8< */
 static inline int
 port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 {
@@ -264,14 +263,13 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 
 	return 0;
 }
-/* >8 End of main functional part of port initialization. */
 
-/* >8 End Basic forwarding application lcore. */
 
+/* Send and receive packet on an Ethernet port. */
 static __rte_noreturn void
 lcore_main()
 {
-    struct rte_mbuf *pkts[BURST_SIZE];
+    struct rte_mbuf *pkts_rcvd[BURST_SIZE];
     struct rte_mbuf *pkt;
     // char *buf_ptr;
     struct rte_ether_hdr *eth_hdr;
@@ -305,17 +303,20 @@ lcore_main()
         }
         size_t header_size = 0;
 
+        /* Get a pointer to start of mbuf. Then, sequentially fill mbuf 
+         with Ethernet header, IP header, UDP header and payload. 
+         Finally, add metadata, such as l2_len and l3_len, in mbuf struct*/
         uint8_t *ptr = rte_pktmbuf_mtod(pkt, uint8_t *);
+        
         /* add in an ethernet header */
         eth_hdr = (struct rte_ether_hdr *)ptr;
-        
         rte_ether_addr_copy(&my_eth, &eth_hdr->src_addr);
         rte_ether_addr_copy(&dst, &eth_hdr->dst_addr);
         eth_hdr->ether_type = rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4);
         ptr += sizeof(*eth_hdr);
         header_size += sizeof(*eth_hdr);
 
-        /* add in ipv4 header*/
+        /* add in ipv4 header */
         ipv4_hdr = (struct rte_ipv4_hdr *)ptr;
         ipv4_hdr->version_ihl = 0x45;
         ipv4_hdr->type_of_service = 0x0;
@@ -333,7 +334,7 @@ lcore_main()
         header_size += sizeof(*ipv4_hdr);
         ptr += sizeof(*ipv4_hdr);
 
-        /* add in UDP hdr*/
+        /* add in UDP hdr */
         udp_hdr = (struct rte_udp_hdr *)ptr;
         uint16_t srcp = 5001 + flow_id;
         uint16_t dstp = 5001 + flow_id;
@@ -359,39 +360,39 @@ lcore_main()
         pkt->nb_segs = 1;
         int pkts_sent = 0;
 
-        unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
+        // If you like to print
+        // unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
        
         pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
         if(pkts_sent == 1)
         {
             seq[flow_id]++;
-            outstanding[flow_id] ++;
+            outstanding[flow_id]++;
         }
         
         uint64_t last_sent = rte_get_timer_cycles();
-        // printf("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
+        printf("Sent packet at %u\n", (unsigned) last_sent);
 
-        /* now poll on receiving packets */
+        /* Now poll on receiving packets */
         nb_rx = 0;
         reqs += 1;
         while ((outstanding[flow_id] > 0)) {
-            nb_rx = rte_eth_rx_burst(1, 0, pkts, BURST_SIZE);
+            nb_rx = rte_eth_rx_burst(1, 0, pkts_rcvd, BURST_SIZE);
             if (nb_rx == 0) {
                 continue;
             }
 
-            printf("Received burst of %u\n", (unsigned)nb_rx);
+            printf("Received burst of %u packets at %u\n", (unsigned)nb_rx, rte_get_timer_cycles());
             for (int i = 0; i < nb_rx; i++) {
                 struct sockaddr_in src, dst;
                 void *payload = NULL;
                 size_t payload_length = 0;
-                int p = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
+                int p = parse_packet(&src, &dst, &payload, &payload_length, pkts_rcvd[i]);
                 if (p != 0) {
-
-                    rte_pktmbuf_free(pkts[i]);
+                    rte_pktmbuf_free(pkts_rcvd[i]);
                     outstanding[p-1]--;
                 } else {
-                    rte_pktmbuf_free(pkts[i]);
+                    rte_pktmbuf_free(pkts_rcvd[i]);
                 }
             }
         }
