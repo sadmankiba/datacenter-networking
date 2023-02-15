@@ -370,8 +370,8 @@ lcore_main()
             outstanding[flow_id]++;
         }
         
-        uint64_t last_sent = rte_get_timer_cycles();
-        printf("Sent packet at %u\n", (unsigned) last_sent);
+        long unsigned int last_sent = rte_get_timer_cycles();
+        printf("Sent packet at %lu\n", last_sent);
 
         /* Now poll on receiving packets */
         nb_rx = 0;
@@ -382,7 +382,7 @@ lcore_main()
                 continue;
             }
 
-            printf("Received burst of %u packets at %u\n", (unsigned)nb_rx, rte_get_timer_cycles());
+            printf("Received burst of %u packets. RTT %f\n", (unsigned)nb_rx, (rte_get_timer_cycles() - last_sent) * rte_get_timer_hz() / 1e9);
             for (int i = 0; i < nb_rx; i++) {
                 struct sockaddr_in src, dst;
                 void *payload = NULL;
@@ -421,6 +421,7 @@ int main(int argc, char *argv[])
         printf( "usage: ./lab1-client <flow_num> <flow_size>\n");
         return 1;
     }
+    printf("CPU Hz: %lu\n", rte_get_timer_hz());
 
     NUM_PING = flow_size / packet_len;
 
@@ -444,9 +445,9 @@ int main(int argc, char *argv[])
 
 	/* Initializing all ports. 8< */
 	RTE_ETH_FOREACH_DEV(portid)
-	if (portid == 1 && port_init(portid, mbuf_pool) != 0)
-		rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n",
-				 portid);
+        if (portid == 1 && port_init(portid, mbuf_pool) != 0)
+            rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n",
+                    portid);
 	/* >8 End of initializing all ports. */
 
 	if (rte_lcore_count() > 1)
