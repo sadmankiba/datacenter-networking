@@ -21,6 +21,7 @@
 #define BURST_SIZE 32
 
 struct rte_mempool *mbuf_pool = NULL;
+uint16_t eth_port_id = 1;
 static struct rte_ether_addr my_eth;
 size_t window_len = 10;
 
@@ -142,41 +143,41 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 }
 /* >8 End of main functional part of port initialization. */
 
+/* Parse a complete UDP packet. */
 static int parse_udp_pkt(struct sockaddr_in *src,
                         struct sockaddr_in *dst,
                         void **payload,
                         size_t *payload_len,
                         struct rte_mbuf *pkt)
 {
-    // packet layout order is (from outside -> in):
-    // ether_hdr
-    // ipv4_hdr
-    // udp_hdr
-    // client timestamp
+    /*
+	 * Packet layout order is (from outside -> in):
+     * ether_hdr | ipv4_hdr | udp_hdr | client timestamp
+	 */
     uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
     size_t header = 0;
 
-    // check the ethernet header
+    /* Parse Ethernet header and Validate dst MAC */
     struct rte_ether_hdr * const eth_hdr = (struct rte_ether_hdr *)(p);
     p += sizeof(*eth_hdr);
     header += sizeof(*eth_hdr);
     uint16_t eth_type = ntohs(eth_hdr->ether_type);
     struct rte_ether_addr mac_addr = {};
-	rte_eth_macaddr_get(1, &mac_addr);
+	rte_eth_macaddr_get(eth_port_id, &mac_addr);
     
-	/* Not required */
-	// if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr) ) {
-    //     printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-	// 		   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-    //         eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
-	// 		eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
-	// 		eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
-    //     return 0;
-    // }
-    // if (RTE_ETHER_TYPE_IPV4 != eth_type) {
-    //     printf("Bad ether type\n");
-    //     return 0;
-    // }
+	
+	if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr) ) {
+        printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+            eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
+			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
+			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
+        return 0;
+    }
+    if (RTE_ETHER_TYPE_IPV4 != eth_type) {
+        printf("Bad ether type\n");
+        return 0;
+    }
 
     // check the IP header
     struct rte_ipv4_hdr *const ip_hdr = (struct rte_ipv4_hdr *)(p);
