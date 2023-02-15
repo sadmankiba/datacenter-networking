@@ -373,6 +373,8 @@ lcore_main(void)
 				udp_h_ack->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
 				
 				/* set the payload */
+				header_size += sizeof(*udp_h_ack);
+				ptr += sizeof(*udp_h_ack);
 				memset(ptr, 'a', ack_len);
 
 				ack->l2_len = RTE_ETHER_HDR_LEN;
