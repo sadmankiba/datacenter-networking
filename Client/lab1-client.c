@@ -10,7 +10,7 @@
 #include <rte_cycles.h>
 #include <rte_lcore.h>
 #include <rte_mbuf.h>
-#include <rte_udp.h>
+#include <rte_tcp.h>
 #include <rte_ip.h>
 
 #include <rte_common.h>
@@ -30,13 +30,12 @@ uint32_t NUM_PING;
 struct rte_mempool *mbuf_pool = NULL;
 static struct rte_ether_addr my_eth;
 uint16_t eth_port_id = 1;
-static size_t message_size = 1000;
 static uint32_t seconds = 1;
 
 size_t window_len = 10;
 
 int flow_size;
-int packet_len = 1000;
+int packet_len = 64;
 int flow_num;
 
 
@@ -93,11 +92,11 @@ uint64_t cycles_elapsed(double timediff) {
 }
 
 /**  
- * Parse a complete UDP packet. Read src IP, dst IP, payload 
+ * Parse a complete TCP packet. Read src IP, dst IP, payload 
  * and payload length from mbuf packet.
  * 
  * @return
- *   - (0) if not a UDP packet
+ *   - (0) if not a TCP packet
  *   - (+ve integer) denoting flow id
  */
 static int parse_packet(struct sockaddr_in *src,
@@ -108,7 +107,7 @@ static int parse_packet(struct sockaddr_in *src,
 {
     /* 
      * Packet layout order is (from outside -> in):
-     * ether_hdr | ipv4_hdr | udp_hdr | payload
+     * ether_hdr | ipv4_hdr | tcp_hdr | payload
      */
     uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
     size_t header = 0;
@@ -128,27 +127,27 @@ static int parse_packet(struct sockaddr_in *src,
         return 0;
     }
 
-    /* Parse IP header. Validate Type = UDP */
+    /* Parse IP header. Validate Type = TCP */
     struct rte_ipv4_hdr *const ip_hdr = (struct rte_ipv4_hdr *)(p);
     p += sizeof(*ip_hdr);
     header += sizeof(*ip_hdr);
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
-    if (IPPROTO_UDP != ip_hdr->next_proto_id) {
+    if (IPPROTO_TCP != ip_hdr->next_proto_id) {
         return 0;
     }
     
     src->sin_addr.s_addr = ipv4_src_addr;
     dst->sin_addr.s_addr = ipv4_dst_addr;
     
-    /* Parse udp header */
-    struct rte_udp_hdr * const udp_hdr = (struct rte_udp_hdr *)(p);
-    p += sizeof(*udp_hdr);
-    header += sizeof(*udp_hdr);
+    /* Parse tcp header */
+    struct rte_tcp_hdr * const tcp_hdr = (struct rte_tcp_hdr *)(p);
+    p += sizeof(*tcp_hdr);
+    header += sizeof(*tcp_hdr);
 
-    in_port_t udp_src_port = udp_hdr->src_port;
-    in_port_t udp_dst_port = udp_hdr->dst_port;
+    in_port_t tcp_src_port = tcp_hdr->src_port;
+    in_port_t tcp_dst_port = tcp_hdr->dst_port;
     int ret = 0;
 	
 	uint16_t p1 = rte_cpu_to_be_16(5001);
@@ -156,25 +155,25 @@ static int parse_packet(struct sockaddr_in *src,
 	uint16_t p3 = rte_cpu_to_be_16(5003);
 	uint16_t p4 = rte_cpu_to_be_16(5004);
 	
-	if (udp_hdr->dst_port ==  p1)
+	if (tcp_hdr->dst_port ==  p1)
 	{
 		ret = 1;
 	}
-	if (udp_hdr->dst_port ==  p2)
+	if (tcp_hdr->dst_port ==  p2)
 	{
 		ret = 2;
 	}
-	if (udp_hdr->dst_port ==  p3)
+	if (tcp_hdr->dst_port ==  p3)
 	{
 		ret = 3;
 	}
-	if (udp_hdr->dst_port ==  p4)
+	if (tcp_hdr->dst_port ==  p4)
 	{
 		ret = 4;
 	}
 
-    src->sin_port = udp_src_port;
-    dst->sin_port = udp_dst_port;
+    src->sin_port = tcp_src_port;
+    dst->sin_port = tcp_dst_port;
     
     src->sin_family = AF_INET;
     dst->sin_family = AF_INET;
@@ -274,14 +273,13 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 
 
 /* Send and receive packet on an Ethernet port. */
-static __rte_noreturn void
-lcore_main()
+void lcore_main()
 {
     struct rte_mbuf *pkts_rcvd[BURST_SIZE];
     struct rte_mbuf *pkt;
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
-    struct rte_udp_hdr *udp_hdr;
+    struct rte_tcp_hdr *tcp_hdr;
 
     /* Dst mac address */ 
     struct rte_ether_addr dst = {{0xb8, 0xce, 0xf6, 0xb0, 0x31, 0x2b}};
@@ -301,8 +299,9 @@ lcore_main()
         seq[i] = 0;
     } 
 
-    double lat_cum = 0;
+    double lat_cum_ns = 0;
     uint64_t flow_start_time = raw_time_ns();
+    
     /* In each iteration, send a packet and receive an ack. */
     while (seq[flow_id] < NUM_PING) {
         pkt = rte_pktmbuf_alloc(mbuf_pool);
@@ -314,7 +313,7 @@ lcore_main()
 
         /* 
          * Get a pointer to start of mbuf. Then, sequentially fill mbuf 
-         * with Ethernet header, IP header, UDP header and payload. 
+         * with Ethernet header, IP header, TCP header and payload. 
          * Finally, add metadata, such as l2_len and l3_len, in mbuf struct
          */
         uint8_t *ptr = rte_pktmbuf_mtod(pkt, uint8_t *);
@@ -331,11 +330,11 @@ lcore_main()
         ipv4_hdr = (struct rte_ipv4_hdr *)ptr;
         ipv4_hdr->version_ihl = 0x45;
         ipv4_hdr->type_of_service = 0x0;
-        ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr) + message_size);
+        ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_tcp_hdr) + packet_len);
         ipv4_hdr->packet_id = rte_cpu_to_be_16(1);
         ipv4_hdr->fragment_offset = 0;
         ipv4_hdr->time_to_live = 64;
-        ipv4_hdr->next_proto_id = IPPROTO_UDP;
+        ipv4_hdr->next_proto_id = IPPROTO_TCP;
         ipv4_hdr->src_addr = rte_cpu_to_be_32("127.0.0.1");
         ipv4_hdr->dst_addr = rte_cpu_to_be_32("127.0.0.1");
 
@@ -344,18 +343,21 @@ lcore_main()
         header_size += sizeof(*ipv4_hdr);
         ptr += sizeof(*ipv4_hdr);
 
-        /* add in UDP hdr */
-        udp_hdr = (struct rte_udp_hdr *)ptr;
+        /* add in TCP hdr */
+        tcp_hdr = (struct rte_tcp_hdr *) ptr;
         uint16_t srcp = 5001 + flow_id;
         uint16_t dstp = 5001 + flow_id;
-        udp_hdr->src_port = rte_cpu_to_be_16(srcp);
-        udp_hdr->dst_port = rte_cpu_to_be_16(dstp);
-        udp_hdr->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr) + packet_len);
-
-        uint16_t udp_cksum =  rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)udp_hdr);
-        udp_hdr->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
-        ptr += sizeof(*udp_hdr);
-        header_size += sizeof(*udp_hdr);
+        tcp_hdr->src_port = rte_cpu_to_be_16(srcp);
+        tcp_hdr->dst_port = rte_cpu_to_be_16(dstp);
+        tcp_hdr->sent_seq = 0;
+        tcp_hdr->recv_ack = 0;
+        tcp_hdr->data_off = 0;
+        tcp_hdr->tcp_flags = 0;
+        tcp_hdr->rx_win = 0;
+        tcp_hdr->cksum = 0;
+        tcp_hdr->tcp_urp = 0;
+        ptr += sizeof(*tcp_hdr);
+        header_size += sizeof(*tcp_hdr);
 
         /* set the payload */
         memset(ptr, 'a', packet_len);
@@ -375,14 +377,13 @@ lcore_main()
         }
         
         uint64_t last_sent = raw_time_ns();
-        printf("Sent packet at %lu\n", last_sent);
 
         /* Now poll on receiving packets */
         nb_rx = 0;
         n_pkts_sent += 1;
         while ((outstanding[flow_id] > 0)) {
             nb_rx = rte_eth_rx_burst(1, 0, pkts_rcvd, BURST_SIZE);
-            uint64_t lat = time_now_ns(last_sent);
+            uint64_t lat_ns = time_now_ns(last_sent);
             if (nb_rx == 0) {
                 continue;
             }
@@ -395,8 +396,7 @@ lcore_main()
                 if (p != 0) {
                     rte_pktmbuf_free(pkts_rcvd[i]);
                     outstanding[p-1]--;
-                    printf("lat %lu ns\n", lat);
-                    lat_cum += lat;
+                    lat_cum_ns += lat_ns;
                 } else {
                     rte_pktmbuf_free(pkts_rcvd[i]);
                 }
@@ -405,15 +405,16 @@ lcore_main()
 
         flow_id = (flow_id + 1) % flow_num;
     }
-    printf("Sent %"PRIu64" packets.\n", n_pkts_sent);
-    printf("Avg lat: %f us\n", (1.0 * lat_cum) / ( n_pkts_sent * 1000));
-    printf("Bw: %f Gbps\n", (1.0 * n_pkts_sent * (header_size + packet_len) * 8) / time_now_ns(flow_start_time));
+    /* latency in us */
+    printf("%f, ", (1.0 * lat_cum_ns) / ( n_pkts_sent * 1000)); 
+    /* Bw in Gbps */
+    printf("%f", (1.0 * n_pkts_sent * (header_size + packet_len) * 8) / time_now_ns(flow_start_time));
 }
+
 /*
  * The main function, which does initialization and calls the per-lcore
  * functions.
  */
-
 int main(int argc, char *argv[])
 {
 
@@ -435,8 +436,7 @@ int main(int argc, char *argv[])
 	int ret = rte_eal_init(argc, argv);
 	if (ret < 0)
 		rte_exit(EXIT_FAILURE, "Error with EAL initialization\n");
-	/* >8 End of initialization the Environment Abstraction Layer (EAL). */
-
+	
 	argc -= ret;
 	argv += ret;
 
@@ -454,15 +454,13 @@ int main(int argc, char *argv[])
         if (portid == 1 && port_init(portid, mbuf_pool) != 0)
             rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n",
                     portid);
-	/* >8 End of initializing all ports. */
-
+	
 	if (rte_lcore_count() > 1)
 		printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
 
 	/* Call lcore_main on the main core only. Called on single lcore. 8< */
 	lcore_main();
-	/* >8 End of called on single lcore. */
-    printf("Done!\n");
+	
 	/* clean up the EAL */
 	rte_eal_cleanup();
 
