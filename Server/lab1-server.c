@@ -154,10 +154,10 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 /* >8 End of main functional part of port initialization. */
 
 /* 
- * Parse an Ethernet packet to check if it contains UDP packet. 
+ * Parse an Ethernet packet to check if it contains TCP packet. 
  * 
  * @return
- *   - (0) if not a UDP packet
+ *   - (0) if not a TCP packet
  *   - (+ve integer) denoting flow id
  */
 static int parse_pkt(struct sockaddr_in *src,
@@ -168,7 +168,7 @@ static int parse_pkt(struct sockaddr_in *src,
 {
     /*
 	 * Packet layout order is (from outside -> in):
-     * ether_hdr | ipv4_hdr | udp_hdr | payload
+     * ether_hdr | ipv4_hdr | tcp_hdr | payload
 	 */
     uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
     size_t header_size = 0;
@@ -189,26 +189,26 @@ static int parse_pkt(struct sockaddr_in *src,
         return 0;
     }
 
-    /* Parse IP header and validate Type = UDP */
+    /* Parse IP header and validate Type = TCP */
     struct rte_ipv4_hdr *const ip_hdr = (struct rte_ipv4_hdr *)(p);
     p += sizeof(*ip_hdr);
     header_size += sizeof(*ip_hdr);
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
-    if (IPPROTO_UDP != ip_hdr->next_proto_id) {
+    if (IPPROTO_TCP != ip_hdr->next_proto_id) {
         return 0;
     }
     
     src->sin_addr.s_addr = ipv4_src_addr;
     dst->sin_addr.s_addr = ipv4_dst_addr;
 
-    /* Parse UDP Header */
-    struct rte_udp_hdr * const udp_hdr = (struct rte_udp_hdr *)(p);
-    p += sizeof(*udp_hdr);
-    header_size += sizeof(*udp_hdr);
-    in_port_t udp_src_port = udp_hdr->src_port;
-    in_port_t udp_dst_port = udp_hdr->dst_port;
+    /* Parse TCP Header */
+    struct rte_tcp_hdr * const tcp_hdr = (struct rte_tcp_hdr *)(p);
+    p += sizeof(*tcp_hdr);
+    header_size += sizeof(*tcp_hdr);
+    in_port_t tcp_src_port = tcp_hdr->src_port;
+    in_port_t tcp_dst_port = tcp_hdr->dst_port;
 	int ret = 0;
 	
 	uint16_t p1 = rte_cpu_to_be_16(5001);
@@ -216,25 +216,25 @@ static int parse_pkt(struct sockaddr_in *src,
 	uint16_t p3 = rte_cpu_to_be_16(5003);
 	uint16_t p4 = rte_cpu_to_be_16(5004);
 	
-	if (udp_hdr->dst_port ==  p1)
+	if (tcp_hdr->dst_port ==  p1)
 	{
 		ret = 1;
 	}
-	if (udp_hdr->dst_port ==  p2)
+	if (tcp_hdr->dst_port ==  p2)
 	{
 		ret = 2;
 	}
-	if (udp_hdr->dst_port ==  p3)
+	if (tcp_hdr->dst_port ==  p3)
 	{
 		ret = 3;
 	}
-	if (udp_hdr->dst_port ==  p4)
+	if (tcp_hdr->dst_port ==  p4)
 	{
 		ret = 4;
 	}
 
-    src->sin_port = udp_src_port;
-    dst->sin_port = udp_dst_port;    
+    src->sin_port = tcp_src_port;
+    dst->sin_port = tcp_dst_port;    
     src->sin_family = AF_INET;
     dst->sin_family = AF_INET;
 
@@ -279,7 +279,7 @@ lcore_main(void)
 			struct rte_mbuf *pkt;
 			struct rte_ether_hdr *eth_h;
 			struct rte_ipv4_hdr *ip_h;
-			struct rte_udp_hdr *udp_h;
+			struct rte_tcp_hdr *tcp_h;
 			struct rte_ether_addr eth_addr;
 			uint32_t ip_addr;
 			uint8_t i;
@@ -289,7 +289,7 @@ lcore_main(void)
 			struct rte_mbuf *ack;
 			struct rte_ether_hdr *eth_h_ack;
 			struct rte_ipv4_hdr *ip_h_ack;
-			struct rte_udp_hdr *udp_h_ack;
+			struct rte_tcp_hdr *tcp_h_ack;
 
 			const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
 
@@ -314,7 +314,7 @@ lcore_main(void)
 				eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
 				ip_h = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr *,
 											   sizeof(struct rte_ether_hdr));
-				udp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_udp_hdr *,
+				tcp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_tcp_hdr *,
 											   sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) );
 				n_pkts_rcvd++;
 
@@ -341,11 +341,11 @@ lcore_main(void)
 				ip_h_ack = (struct rte_ipv4_hdr *)ptr;
 				ip_h_ack->version_ihl = 0x45;
 				ip_h_ack->type_of_service = 0x0;
-				ip_h_ack->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr) + ack_len);
+				ip_h_ack->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_tcp_hdr) + ack_len);
 				ip_h_ack->packet_id = rte_cpu_to_be_16(1);
 				ip_h_ack->fragment_offset = 0;
 				ip_h_ack->time_to_live = 64;
-				ip_h_ack->next_proto_id = IPPROTO_UDP;
+				ip_h_ack->next_proto_id = IPPROTO_TCP;
 				ip_h_ack->src_addr = ip_h->dst_addr;
 				ip_h_ack->dst_addr = ip_h->src_addr;
 
@@ -354,18 +354,21 @@ lcore_main(void)
 				header_size += sizeof(*ip_h_ack);
 				ptr += sizeof(*ip_h_ack);
 				
-				/* add in UDP hdr */
-				udp_h_ack = (struct rte_udp_hdr *)ptr;
-				udp_h_ack->src_port = udp_h->dst_port;
-				udp_h_ack->dst_port = udp_h->src_port;
-				udp_h_ack->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr) + ack_len);
-
-				uint16_t udp_cksum =  rte_ipv4_udptcp_cksum(ip_h_ack, (void *)udp_h_ack);
-				udp_h_ack->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
+				/* add in TCP hdr */
+				tcp_h_ack = (struct rte_tcp_hdr *)ptr;
+				tcp_h_ack->src_port = tcp_h->dst_port;
+				tcp_h_ack->dst_port = tcp_h->src_port;
+				tcp_h_ack->sent_seq = 0;
+				tcp_h_ack->recv_ack = 0;
+				tcp_h_ack->data_off = 0;
+				tcp_h_ack->tcp_flags = 0;
+				tcp_h_ack->rx_win = 0;
+				tcp_h_ack->cksum = 0;
+				tcp_h_ack->tcp_urp = 0;
 				
 				/* set the payload */
-				header_size += sizeof(*udp_h_ack);
-				ptr += sizeof(*udp_h_ack);
+				header_size += sizeof(*tcp_h_ack);
+				ptr += sizeof(*tcp_h_ack);
 				memset(ptr, 'a', ack_len);
 
 				ack->l2_len = RTE_ETHER_HDR_LEN;
