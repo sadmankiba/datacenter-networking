@@ -30,6 +30,10 @@ CFLAGS += -O3 $(shell $(PKGCONF) --cflags libdpdk)
 LDFLAGS_SHARED = $(shell $(PKGCONF) --libs libdpdk)
 LDFLAGS_STATIC = $(shell $(PKGCONF) --static --libs libdpdk)
 
+ifdef DEBUG
+CFLAGS += -DDEBUG
+endif 
+
 ifeq ($(MAKECMDGOALS),static)
 # check for broken pkg-config
 ifeq ($(shell echo $(LDFLAGS_STATIC) | grep 'whole-archive.*l:lib.*no-whole-archive'),)
