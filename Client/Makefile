@@ -18,7 +18,7 @@ all: shared
 .PHONY: shared static
 
 run:
-	cd build && ./lab1-client 1 1024
+	cd build && ./lab1-client 1 $(FLOW_SIZE)
 
 shared: build/$(APP)-shared
 	ln -sf $(APP)-shared build/$(APP)

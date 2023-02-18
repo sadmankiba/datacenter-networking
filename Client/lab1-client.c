@@ -325,7 +325,7 @@ void lcore_main()
     
     debug("To send %u packets\n", NUM_PING);
     /* Repeatedly construct packet, retransmit, send data, recv ack. */
-    while (last_pkt_sent < NUM_PING) {
+    while (last_pkt_acked < NUM_PING) {
         debug("---New iter---\nlast_pkt_acked: %lu, last_pkt_sent: %lu, last_pkt_written: %lu\n",
             last_pkt_acked, last_pkt_sent, last_pkt_written);
         size_t n_new_pkt = NUM_PING - last_pkt_written < NEW_PKT? 
@@ -344,19 +344,26 @@ void lcore_main()
         }
 
         /* Send data */
-        while(last_pkt_sent - last_pkt_acked < window) {
+        while((last_pkt_sent - last_pkt_acked < window) 
+            && (last_pkt_sent < last_pkt_written)) {
             rte_eth_tx_burst(1, 0, &(buf[(last_pkt_sent) % buf_size]), 1);
             time_sent[last_pkt_sent % window_len] = raw_time_ns();
             last_pkt_sent++;
+            debug("Sent pkt seq %lu\n", last_pkt_sent);
         }
 
         /* Recv data */
-        while((nb_rx = rte_eth_rx_burst(1, 0, pkts_rcvd, BURST_SIZE)) != 0) {
+        while(true) {
+            nb_rx = rte_eth_rx_burst(eth_port_id, 0, pkts_rcvd, BURST_SIZE);
             uint64_t time_recvd = raw_time_ns();
+            debug("Received %u packets\n", nb_rx);
+            if(nb_rx == 0) break;
+            
             for (int i = 0; i < nb_rx; i++) {
                 int p = parse_packet(&src, &dst, &recv_ack, &payload, &recv_pld_len, pkts_rcvd[i]);
                 if (p != 0) {
                     if (recv_ack > last_pkt_acked) {
+                        debug("Received ack %lu\n", recv_ack);
                         n_empty_buf += (recv_ack - last_pkt_acked);
                         last_pkt_acked = recv_ack;
                         n_pkts_acked++;
