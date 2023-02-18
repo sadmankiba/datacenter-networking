@@ -20,8 +20,10 @@
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
+#define N_PKT_READ 100
 
 struct rte_mbuf * construct_ack(struct rte_mbuf *);
+uint32_t get_seq(struct rte_mbuf *);
 
 struct rte_mempool *mbuf_pool = NULL;
 uint16_t eth_port_id = 1;
@@ -163,11 +165,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
  *   - (0) if not a TCP packet
  *   - (+ve integer) denoting flow id
  */
-static int parse_pkt(struct sockaddr_in *src,
-                        struct sockaddr_in *dst,
-                        void **payload,
-                        size_t *payload_len,
-                        struct rte_mbuf *pkt)
+static int verify_pkt(struct rte_mbuf *pkt)
 {
     /*
 	 * Packet layout order is (from outside -> in):
@@ -204,9 +202,6 @@ static int parse_pkt(struct sockaddr_in *src,
     if (IPPROTO_TCP != ip_hdr->next_proto_id) {
         return 0;
     }
-    
-    src->sin_addr.s_addr = ipv4_src_addr;
-    dst->sin_addr.s_addr = ipv4_dst_addr;
 
     /* Parse TCP Header */
     struct rte_tcp_hdr * const tcp_hdr = (struct rte_tcp_hdr *)(p);
@@ -238,14 +233,6 @@ static int parse_pkt(struct sockaddr_in *src,
 		ret = 4;
 	}
 
-    src->sin_port = tcp_src_port;
-    dst->sin_port = tcp_dst_port;    
-    src->sin_family = AF_INET;
-    dst->sin_family = AF_INET;
-
-    *payload_len = pkt->pkt_len - header_size;
-    *payload = (void *)p;
-
 	debug("Parsed packet of flow %u, seq %u\n", ret, tcp_hdr->sent_seq);
 	return ret;
 }
@@ -255,7 +242,7 @@ static __rte_noreturn void
 lcore_main(void)
 {
 	uint16_t port;
-	uint16_t nb_rx;
+	uint16_t n_rcvd;
 
 	/*
 	 * Check that the port is on the same NUMA node as the polling thread
@@ -273,61 +260,87 @@ lcore_main(void)
 	printf("\nCore %u forwarding packets. [Ctrl+C to quit]\n",
 		   rte_lcore_id());
 
-	/* Get burst of RX packets from port1 and reply ack */ 
-	for (;;)
-	{
-		RTE_ETH_FOREACH_DEV(port)
-		{
+	/* Receive data structure */
+	struct rte_mbuf *rcvd_pkts[BURST_SIZE];
+	struct rte_mbuf *pkt;
+	struct rte_mbuf *ack;
+	uint8_t new_acks = 0;
+	struct rte_mbuf *acks[BURST_SIZE];
+
+	const uint16_t n_rcvd;
+	
+	/* Sliding window receiving variables */
+	last_pkt_read = 0; /* 1-indexed */
+	nxt_pkt_expcd = 1;
+	last_pkt_recvd = 0;
+	uint16_t n_buf_pkts = 0;
+	struct rte_mbuf *buf[MBUF_CACHE_SIZE] = {NULL};
+	uint32_t seq;
+	uint8_t pkts_to_cnsm;
+	
+	/* 
+	 * In each iter, consume buffer, get a burst of RX packets 
+	 * and reply an ack if required 
+	 */ 
+	for (;;) {
+		debug("last_pkt_read %lu, nxt_pkt_expcd %lu, last_pkt_recvd %lu\n",
+			last_pkt_read, nxt_pkt_expcd, last_pkt_recvd);
+			
+		pkts_to_cnsm = (n_buf_pkts < N_PKT_READ)? n_buf_pkts: N_PKT_READ;
+		for (int i = 0; i < pkts_to_cnsm; i++) 
+			buf[(last_pkt_read + i) % MBUF_CACHE_SIZE] = NULL;
+		
+		last_pkt_read += pkts_to_cnsm;
+		
+		RTE_ETH_FOREACH_DEV(port) {
 			if (port != 1)
 				continue;
-
-			struct rte_mbuf *bufs[BURST_SIZE];
-			struct rte_mbuf *pkt;
-			struct rte_mbuf *ack;
-			struct rte_ether_addr eth_addr;
-			uint32_t ip_addr;
-			uint8_t i;
-			uint8_t nb_replies = 0;
-
-			struct rte_mbuf *acks[BURST_SIZE];
-			
-
-			const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
-
-			if (unlikely(nb_rx == 0))
-				continue;
-
-			/* For each packet received, add an ack packet to an array. */
-			for (i = 0; i < nb_rx; i++)
-			{
-				pkt = bufs[i];
-				ack = construct_ack(pkt);
-				if (ack == NULL) continue;
-
-				acks[nb_replies++] = ack;
-				rte_pktmbuf_free(bufs[i]);
-			}
-
-			/* Send back ack replies. */
-			uint16_t nb_tx = 0;
-			if (nb_replies > 0) {
-				nb_tx += rte_eth_tx_burst(port, 0, acks, nb_replies);
-				debug("Sent %u acks\n", nb_replies);
-			}	
-
-			/* Free any unsent packets. */
-			if (unlikely(nb_tx < nb_rx))
-			{
-				uint16_t buf;
-				for (buf = nb_tx; buf < nb_rx; buf++)
-					rte_pktmbuf_free(acks[buf]);
-			}
+			n_rcvd = rte_eth_rx_burst(port, 0, rcvd_pkts, BURST_SIZE);
 		}
+
+		if (unlikely(n_rcvd == 0))
+			continue;
+
+		/* Add each rcvd pkt to buffer */
+		bool flow_pkt_rcvd = false;
+		for(i = 0; i < n_rcvd; i++) {
+			pkt = rcvd_pkts[i];
+			if(verify_pkt(pkt) == 0){
+				rte_pktmbuf_free(pkt);
+				continue;
+			}
+			
+			flow_pkt_rcvd = true;
+			seq = get_seq(pkt);
+			buf[(seq - 1) % MBUF_CACHE_SIZE] = pkt;
+			if (seq > last_pkt_recvd)
+				last_pkt_recvd = seq;
+		}
+		if (!flow_pkt_rcvd) continue;
+
+		/* Find the highest seq packet rcvd */
+		int new_seqd_pkt = 0;
+		while(buf[nxt_pkt_expcd - 1 + new_seqd_pkt] != NULL 
+			&& new_seqd_pkt < MBUF_CACHE_SIZE) 
+			new_seqd_pkt++;
+
+		nxt_pkt_expcd += new_seqd_pkt;
+
+		/* Construct an ack packet for (nxt_pkt_expcd - 1). */
+		ack = construct_ack(rcvd_pkts[0], nxt_pkt_expcd - 1);	
+		
+		for (i = 0; i < n_rcvd; i++) {	
+			rte_pktmbuf_free(rcvd_pkts[i]);
+		}
+
+		/* Send back ack. */
+		rte_eth_tx_burst(port, 0, &ack, 1);
+		debug("Sent ack %lu\n", nxt_pkt_expcd - 1);
 	}
 }
 
-/* Construct Ack packet for a received packet */
-struct rte_mbuf * construct_ack(struct rte_mbuf *pkt) {
+/* Construct Ack packet for a received packet and custom ack num */
+struct rte_mbuf * construct_ack(struct rte_mbuf *pkt, uint32_t ack_num) {
 	struct rte_ether_hdr *eth_h;
 	struct rte_ipv4_hdr *ip_h;
 	struct rte_tcp_hdr *tcp_h;
@@ -336,15 +349,6 @@ struct rte_mbuf * construct_ack(struct rte_mbuf *pkt) {
 	struct rte_ether_hdr *eth_h_ack;
 	struct rte_ipv4_hdr *ip_h_ack;
 	struct rte_tcp_hdr *tcp_h_ack;
-
-	struct sockaddr_in src, dst;
-	void *payload = NULL;
-	size_t payload_length = 0;
-	int ret_parse = parse_pkt(&src, &dst, &payload, &payload_length, pkt);
-	if(ret_parse == 0){
-		rte_pktmbuf_free(pkt);
-		return NULL;
-	}
 
 	eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
 	ip_h = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr *,
@@ -394,7 +398,7 @@ struct rte_mbuf * construct_ack(struct rte_mbuf *pkt) {
 	tcp_h_ack->src_port = tcp_h->dst_port;
 	tcp_h_ack->dst_port = tcp_h->src_port;
 	tcp_h_ack->sent_seq = 0;
-	tcp_h_ack->recv_ack = tcp_h->sent_seq;
+	tcp_h_ack->recv_ack = ack_num;
 	tcp_h_ack->data_off = 0;
 	tcp_h_ack->tcp_flags = 0;
 	tcp_h_ack->rx_win = 0;
@@ -412,8 +416,17 @@ struct rte_mbuf * construct_ack(struct rte_mbuf *pkt) {
 	ack->pkt_len = header_size + ack_len;
 	ack->nb_segs = 1;
 	debug("Constructed ack #%u\n", tcp_h_ack->recv_ack);
-	
+
+	*seq = tcp_h->sent_seq;
 	return ack;
+}
+
+uint32_t get_seq(struct rte_mbuf *pkt) {
+	uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
+
+	p += sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr);
+	struct rte_tcp_hdr *tcp_hdr = (struct rte_tcp_hdr *) p;
+	return tcp_hdr->sent_seq;
 }
 
 /*
