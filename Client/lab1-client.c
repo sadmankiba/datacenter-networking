@@ -24,6 +24,9 @@
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
+
+size_t construct_pkt(struct rte_mbuf *, size_t);
+
 uint32_t NUM_PING;
 
 /* Define the mempool globally */
@@ -35,7 +38,7 @@ static uint32_t seconds = 1;
 size_t window_len = 10;
 
 int flow_size;
-int packet_len = 64;
+int payload_len = 64;
 int flow_num;
 
 
@@ -301,76 +304,10 @@ void lcore_main()
         pkt = rte_pktmbuf_alloc(mbuf_pool);
         if (pkt == NULL) {
             printf("Error allocating tx mbuf\n");
-            return -EINVAL;
+            return;
         }
-        header_size = 0;
-
-        if (true) 
-            construct_pkt(pkt, flow_id); 
-        else {
-        struct rte_ether_hdr *eth_hdr;
-        struct rte_ipv4_hdr *ipv4_hdr;
-        struct rte_tcp_hdr *tcp_hdr;
-
-        /* Dst mac address */ 
-        struct rte_ether_addr dst = {{0xb8, 0xce, 0xf6, 0xb0, 0x31, 0x2b}};
-        /* 
-         * Get a pointer to start of mbuf. Then, sequentially fill mbuf 
-         * with Ethernet header, IP header, TCP header and payload. 
-         * Finally, add metadata, such as l2_len and l3_len, in mbuf struct
-         */
-        uint8_t *ptr = rte_pktmbuf_mtod(pkt, uint8_t *);
-        
-        /* add in an ethernet header */
-        eth_hdr = (struct rte_ether_hdr *)ptr;
-        rte_ether_addr_copy(&my_eth, &eth_hdr->src_addr);
-        rte_ether_addr_copy(&dst, &eth_hdr->dst_addr);
-        eth_hdr->ether_type = rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4);
-        ptr += sizeof(*eth_hdr);
-        header_size += sizeof(*eth_hdr);
-
-        /* add in ipv4 header */
-        ipv4_hdr = (struct rte_ipv4_hdr *)ptr;
-        ipv4_hdr->version_ihl = 0x45;
-        ipv4_hdr->type_of_service = 0x0;
-        ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_tcp_hdr) + packet_len);
-        ipv4_hdr->packet_id = rte_cpu_to_be_16(1);
-        ipv4_hdr->fragment_offset = 0;
-        ipv4_hdr->time_to_live = 64;
-        ipv4_hdr->next_proto_id = IPPROTO_TCP;
-        ipv4_hdr->src_addr = rte_cpu_to_be_32("127.0.0.1");
-        ipv4_hdr->dst_addr = rte_cpu_to_be_32("127.0.0.1");
-
-        uint32_t ipv4_checksum = wrapsum(checksum((unsigned char *)ipv4_hdr, sizeof(struct rte_ipv4_hdr), 0));
-        ipv4_hdr->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
-        header_size += sizeof(*ipv4_hdr);
-        ptr += sizeof(*ipv4_hdr);
-
-        /* add in TCP hdr */
-        tcp_hdr = (struct rte_tcp_hdr *) ptr;
-        uint16_t srcp = 5001 + flow_id;
-        uint16_t dstp = 5001 + flow_id;
-        tcp_hdr->src_port = rte_cpu_to_be_16(srcp);
-        tcp_hdr->dst_port = rte_cpu_to_be_16(dstp);
-        tcp_hdr->sent_seq = 0;
-        tcp_hdr->recv_ack = 0;
-        tcp_hdr->data_off = 0;
-        tcp_hdr->tcp_flags = 0;
-        tcp_hdr->rx_win = 0;
-        tcp_hdr->cksum = 0;
-        tcp_hdr->tcp_urp = 0;
-        ptr += sizeof(*tcp_hdr);
-        header_size += sizeof(*tcp_hdr);
-
-        /* set the payload */
-        memset(ptr, 'a', packet_len);
-
-        pkt->l2_len = RTE_ETHER_HDR_LEN;
-        pkt->l3_len = sizeof(struct rte_ipv4_hdr);
-        pkt->data_len = header_size + packet_len;
-        pkt->pkt_len = header_size + packet_len;
-        pkt->nb_segs = 1;
-        }
+        size_t len_pkt = construct_pkt(pkt, flow_id);
+        header_size = len_pkt - payload_len; 
 
         int pkts_sent = 0;
        
@@ -412,19 +349,20 @@ void lcore_main()
     }
     /* latency in us */
     printf("%f, ", (1.0 * lat_cum_ns) / ( n_pkts_sent * 1000)); 
+    
     /* Bw in Gbps */
-    printf("%f", (1.0 * n_pkts_sent * (header_size + packet_len) * 8) / time_now_ns(flow_start_time));
+    printf("%f", (1.0 * n_pkts_sent * (header_size + payload_len) * 8) / time_now_ns(flow_start_time));
 }
 
-void construct_pkt(struct rte_mbuf *pkt, size_t flow_id) {
+size_t construct_pkt(struct rte_mbuf *pkt, size_t flow_id) {
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
     struct rte_tcp_hdr *tcp_hdr;
 
     /* Dst mac address */ 
-    struct rte_ether_addr dst = {{0xb8, 0xce, 0xf6, 0xb0, 0x31, 0x2b}};
+    struct rte_ether_addr dst = {{0x14, 0x58, 0xd0, 0x58, 0x9f, 0x53}};
 
-    size_t header_size;
+    size_t header_size = 0;
 
     /* 
      * Get a pointer to start of mbuf. Then, sequentially fill mbuf 
@@ -445,7 +383,7 @@ void construct_pkt(struct rte_mbuf *pkt, size_t flow_id) {
     ipv4_hdr = (struct rte_ipv4_hdr *)ptr;
     ipv4_hdr->version_ihl = 0x45;
     ipv4_hdr->type_of_service = 0x0;
-    ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_tcp_hdr) + packet_len);
+    ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_tcp_hdr) + payload_len);
     ipv4_hdr->packet_id = rte_cpu_to_be_16(1);
     ipv4_hdr->fragment_offset = 0;
     ipv4_hdr->time_to_live = 64;
@@ -475,13 +413,15 @@ void construct_pkt(struct rte_mbuf *pkt, size_t flow_id) {
     header_size += sizeof(*tcp_hdr);
 
     /* set the payload */
-    memset(ptr, 'a', packet_len);
+    memset(ptr, 'a', payload_len);
 
     pkt->l2_len = RTE_ETHER_HDR_LEN;
     pkt->l3_len = sizeof(struct rte_ipv4_hdr);
-    pkt->data_len = header_size + packet_len;
-    pkt->pkt_len = header_size + packet_len;
+    pkt->data_len = header_size + payload_len;
+    pkt->pkt_len = header_size + payload_len;
     pkt->nb_segs = 1;
+
+    return header_size + payload_len;
 }
 
 /*
@@ -503,7 +443,7 @@ int main(int argc, char *argv[])
     }
     printf("CPU Hz: %lu\n", rte_get_timer_hz());
 
-    NUM_PING = flow_size / packet_len;
+    NUM_PING = flow_size / payload_len;
 
 	/* Initializion the Environment Abstraction Layer (EAL). 8< */
 	int ret = rte_eal_init(argc, argv);
