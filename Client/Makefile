@@ -18,7 +18,7 @@ all: shared
 .PHONY: shared static
 
 run:
-	cd build && ./lab1-client 1 10000
+	cd build && ./lab1-client 1 1024
 
 shared: build/$(APP)-shared
 	ln -sf $(APP)-shared build/$(APP)
@@ -29,6 +29,10 @@ PC_FILE := $(shell $(PKGCONF) --path libdpdk 2>/dev/null)
 CFLAGS += -O3 $(shell $(PKGCONF) --cflags libdpdk)
 LDFLAGS_SHARED = $(shell $(PKGCONF) --libs libdpdk)
 LDFLAGS_STATIC = $(shell $(PKGCONF) --static --libs libdpdk)
+
+ifdef DEBUG
+CFLAGS += -DDEBUG
+endif 
 
 ifeq ($(MAKECMDGOALS),static)
 # check for broken pkg-config

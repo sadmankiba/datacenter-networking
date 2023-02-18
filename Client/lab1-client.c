@@ -12,8 +12,8 @@
 #include <rte_mbuf.h>
 #include <rte_tcp.h>
 #include <rte_ip.h>
-
 #include <rte_common.h>
+#include "debug.h"
 
 // #define PKT_TX_IPV4          (1ULL << 55)
 // #define PKT_TX_IP_CKSUM      (1ULL << 54)
@@ -25,7 +25,7 @@
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
 
-size_t construct_pkt(size_t);
+struct rte_mbuf * construct_pkt(size_t, uint32_t);
 size_t get_appl_data();
 
 uint32_t NUM_PING;
@@ -107,6 +107,7 @@ uint64_t cycles_elapsed(double timediff) {
  */
 static int parse_packet(struct sockaddr_in *src,
                         struct sockaddr_in *dst,
+                        uint64_t *recv_ack,
                         void **payload,
                         size_t *payload_len,
                         struct rte_mbuf *pkt)
@@ -184,6 +185,7 @@ static int parse_packet(struct sockaddr_in *src,
     src->sin_family = AF_INET;
     dst->sin_family = AF_INET;
     
+    *recv_ack = tcp_hdr->recv_ack;
     *payload_len = pkt->pkt_len - header;
     *payload = (void *)p;
     return ret;
@@ -285,7 +287,7 @@ void lcore_main()
     struct rte_mbuf *pkts_rcvd[BURST_SIZE];
     struct rte_mbuf *pkt;
     uint16_t nb_rx;
-    uint64_t n_pkts_sent = 0;
+    uint64_t n_pkts_acked = 0;
     size_t header_size;
     
     int outstanding[flow_num];
@@ -296,16 +298,22 @@ void lcore_main()
         outstanding[i] = 0;
         seq[i] = 0;
     } 
+    /* Data structures for receiving */
+    struct sockaddr_in src, dst;
+    void *payload = NULL;
+    size_t recv_pld_len;
 
     /* Timing variables */
-    double lat_cum_ns = 0;
+    uint64_t lat_cum_us = 0;
     uint64_t flow_start_time = raw_time_ns();
+    uint64_t lat_ns;
 
     /* Sliding window variables */
-    struct rte_mbuf *pkts[buf_size];
-    uint64_t last_pkt_acked = -1;
-    uint64_t last_pkt_sent = -1;
-    uint64_t last_pkt_written = -1;
+    struct rte_mbuf *buf[buf_size];
+    uint64_t last_pkt_acked = 0; /* 1-indexed */
+    uint64_t last_pkt_sent = 0;
+    uint64_t last_pkt_written = 0;
+    uint64_t recv_ack = 0;
     size_t n_empty_buf = buf_size;
     uint64_t retran[buf_size];
     uint16_t retran_last_idx = 0;
@@ -315,12 +323,16 @@ void lcore_main()
     for(int i = 0; i < buf_size; i++)
         retran[i] = -1;
     
+    debug("To send %u packets\n", NUM_PING);
     /* Repeatedly construct packet, retransmit, send data, recv ack. */
-    while (last_pkt_sent < (NUM_PING - 1)) {
-        size_t n_new_pkt = min(NUM_PING - last_pkt_written - 1, NEW_PKT); 
+    while (last_pkt_sent < NUM_PING) {
+        debug("---New iter---\nlast_pkt_acked: %lu, last_pkt_sent: %lu, last_pkt_written: %lu\n",
+            last_pkt_acked, last_pkt_sent, last_pkt_written);
+        size_t n_new_pkt = NUM_PING - last_pkt_written < NEW_PKT? 
+            NUM_PING - last_pkt_written: NEW_PKT; 
         for(int i = 0; i < n_new_pkt && n_empty_buf > 0; i++) {
             pkt = construct_pkt(flow_id, last_pkt_written + 1);
-            buf[(last_pkt_written + 1) % buf_size] = pkt;
+            buf[(last_pkt_written) % buf_size] = pkt;
             last_pkt_written += 1;
             n_empty_buf--;
         }
@@ -333,79 +345,37 @@ void lcore_main()
 
         /* Send data */
         while(last_pkt_sent - last_pkt_acked < window) {
-            rte_eth_tx_burst(1, 0, buf[(last_pkt_sent + 1) % buf_size], 1);
-            last_pkt_sent++;
+            rte_eth_tx_burst(1, 0, &(buf[(last_pkt_sent) % buf_size]), 1);
             time_sent[last_pkt_sent % window_len] = raw_time_ns();
+            last_pkt_sent++;
         }
 
         /* Recv data */
         while((nb_rx = rte_eth_rx_burst(1, 0, pkts_rcvd, BURST_SIZE)) != 0) {
             uint64_t time_recvd = raw_time_ns();
             for (int i = 0; i < nb_rx; i++) {
-                int p = parse_packet(&src, &dst, &recv_ack, &payload, &payload_length, pkts_rcvd[i]);
+                int p = parse_packet(&src, &dst, &recv_ack, &payload, &recv_pld_len, pkts_rcvd[i]);
                 if (p != 0) {
                     if (recv_ack > last_pkt_acked) {
-                        uint64_t lat_ns = time_sent[recv_ack % window_len] - time_recvd;
+                        n_empty_buf += (recv_ack - last_pkt_acked);
                         last_pkt_acked = recv_ack;
-                        n_pkts_sent++;
-                        lat_cum_ns += lat_ns;
+                        n_pkts_acked++;
+                        lat_ns = time_recvd - time_sent[recv_ack % window_len];
+                        lat_cum_us += (uint64_t) (lat_ns * 1.0 / 1000);
                     }
                 }
+                rte_pktmbuf_free(pkts_rcvd[i]);
             }
         }
-        n_empty_buf = last_pkt_written - last_pkt_acked;
+        debug("n_pkts_acked %lu, lat_cum_us %lu, n_empty_buf %lu\n",
+            n_pkts_acked, lat_cum_us, n_empty_buf);
     }
 
-    /* In each iteration, send a packet and receive an ack. */
-    if(false) {
-    while (seq[flow_id] < NUM_PING) {
-        pkt = construct_pkt(flow_id);
-        header_size = pkt->pkt_len - payload_len; 
-
-        int pkts_sent = 0;
-       
-        pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
-        if(pkts_sent == 1)
-        {
-            seq[flow_id]++;
-            outstanding[flow_id]++;
-        }
-        
-        uint64_t last_sent = raw_time_ns();
-
-        /* Now poll on receiving packets */
-        nb_rx = 0;
-        n_pkts_sent += 1;
-        while ((outstanding[flow_id] > 0)) {
-            nb_rx = rte_eth_rx_burst(1, 0, pkts_rcvd, BURST_SIZE);
-            uint64_t lat_ns = time_now_ns(last_sent);
-            if (nb_rx == 0) {
-                continue;
-            }
-
-            for (int i = 0; i < nb_rx; i++) {
-                struct sockaddr_in src, dst;
-                void *payload = NULL;
-                size_t payload_length = 0;
-                int p = parse_packet(&src, &dst, &payload, &payload_length, pkts_rcvd[i]);
-                if (p != 0) {
-                    rte_pktmbuf_free(pkts_rcvd[i]);
-                    outstanding[p-1]--;
-                    lat_cum_ns += lat_ns;
-                } else {
-                    rte_pktmbuf_free(pkts_rcvd[i]);
-                }
-            }
-        }
-
-        flow_id = (flow_id + 1) % flow_num;
-    }
-    }
     /* latency in us */
-    printf("%f, ", (1.0 * lat_cum_ns) / ( n_pkts_sent * 1000)); 
+    printf("%f, ", (1.0 * lat_cum_us) / n_pkts_acked); 
     
     /* Bw in Gbps */
-    printf("%f", (1.0 * n_pkts_sent * (header_size + payload_len) * 8) / time_now_ns(flow_start_time));
+    printf("%f", (1.0 * n_pkts_acked * (header_size + payload_len) * 8) / time_now_ns(flow_start_time));
 }
 
 struct rte_mbuf * construct_pkt(size_t flow_id, uint32_t sent_seq) {
@@ -501,7 +471,6 @@ int main(int argc, char *argv[])
         printf( "usage: ./lab1-client <flow_num> <flow_size>\n");
         return 1;
     }
-    printf("CPU Hz: %lu\n", rte_get_timer_hz());
 
     NUM_PING = flow_size / payload_len;
 
