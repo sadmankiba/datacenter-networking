@@ -300,6 +300,9 @@ lcore_main(void)
 			for (i = 0; i < nb_rx; i++)
 			{
 				pkt = bufs[i];
+				if(true) {
+					ack = construct_ack(pkt);
+				} else {
 				struct sockaddr_in src, dst;
                 void *payload = NULL;
                 size_t payload_length = 0;
@@ -376,6 +379,7 @@ lcore_main(void)
 				ack->data_len = header_size + ack_len;
 				ack->pkt_len = header_size + ack_len;
 				ack->nb_segs = 1;
+				}
 
 				acks[nb_replies++] = ack;
 				
@@ -398,6 +402,85 @@ lcore_main(void)
 			}
 		}
 	}
+}
+
+construct_ack(struct rte_mbuf *pkt) {
+	struct sockaddr_in src, dst;
+	void *payload = NULL;
+	size_t payload_length = 0;
+	int ret_parse = parse_pkt(&src, &dst, &payload, &payload_length, pkt);
+	if(ret_parse != 0){
+		printf("Received pkt #%d\n", n_pkts_rcvd);
+	} else {
+		rte_pktmbuf_free(pkt);
+		continue;
+	}
+
+	eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
+	ip_h = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr *,
+									sizeof(struct rte_ether_hdr));
+	tcp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_tcp_hdr *,
+									sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) );
+	n_pkts_rcvd++;
+
+
+	/* Now, construct and send an ack */
+	ack = rte_pktmbuf_alloc(mbuf_pool);
+	if (ack == NULL) {
+		printf("Error allocating tx mbuf\n");
+		return -EINVAL;
+	}
+	size_t header_size = 0;
+
+	uint8_t *ptr = rte_pktmbuf_mtod(ack, uint8_t *);
+	
+	/* add in an ethernet header */
+	eth_h_ack = (struct rte_ether_hdr *)ptr;
+	rte_ether_addr_copy(&my_eth, &eth_h_ack->src_addr);
+	rte_ether_addr_copy(&eth_h->src_addr, &eth_h_ack->dst_addr);
+	eth_h_ack->ether_type = rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4);
+	ptr += sizeof(*eth_h_ack);
+	header_size += sizeof(*eth_h_ack);
+
+	/* add in ipv4 header */
+	ip_h_ack = (struct rte_ipv4_hdr *)ptr;
+	ip_h_ack->version_ihl = 0x45;
+	ip_h_ack->type_of_service = 0x0;
+	ip_h_ack->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_tcp_hdr) + ack_len);
+	ip_h_ack->packet_id = rte_cpu_to_be_16(1);
+	ip_h_ack->fragment_offset = 0;
+	ip_h_ack->time_to_live = 64;
+	ip_h_ack->next_proto_id = IPPROTO_TCP;
+	ip_h_ack->src_addr = ip_h->dst_addr;
+	ip_h_ack->dst_addr = ip_h->src_addr;
+
+	uint32_t ipv4_checksum = wrapsum(checksum((unsigned char *)ip_h_ack, sizeof(struct rte_ipv4_hdr), 0));
+	ip_h_ack->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
+	header_size += sizeof(*ip_h_ack);
+	ptr += sizeof(*ip_h_ack);
+	
+	/* add in TCP hdr */
+	tcp_h_ack = (struct rte_tcp_hdr *)ptr;
+	tcp_h_ack->src_port = tcp_h->dst_port;
+	tcp_h_ack->dst_port = tcp_h->src_port;
+	tcp_h_ack->sent_seq = 0;
+	tcp_h_ack->recv_ack = tcp_h->sent_seq;
+	tcp_h_ack->data_off = 0;
+	tcp_h_ack->tcp_flags = 0;
+	tcp_h_ack->rx_win = 0;
+	tcp_h_ack->cksum = 0;
+	tcp_h_ack->tcp_urp = 0;
+	
+	/* set the payload */
+	header_size += sizeof(*tcp_h_ack);
+	ptr += sizeof(*tcp_h_ack);
+	memset(ptr, 'a', ack_len);
+
+	ack->l2_len = RTE_ETHER_HDR_LEN;
+	ack->l3_len = sizeof(struct rte_ipv4_hdr);
+	ack->data_len = header_size + ack_len;
+	ack->pkt_len = header_size + ack_len;
+	ack->nb_segs = 1;
 }
 
 /*
