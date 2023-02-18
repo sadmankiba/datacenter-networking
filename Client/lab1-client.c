@@ -24,6 +24,7 @@
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
+#define N_PKT_WRT 100
 
 struct rte_mbuf * construct_pkt(size_t, uint32_t);
 size_t get_appl_data();
@@ -38,7 +39,6 @@ static uint32_t seconds = 1;
 
 size_t window_len = 10;
 size_t buf_size = 500;
-size_t NEW_PKT = 100;
 
 int flow_size;
 int payload_len = 64;
@@ -328,8 +328,8 @@ void lcore_main()
     while (last_pkt_acked < NUM_PING) {
         debug("---New iter---\nlast_pkt_acked: %lu, last_pkt_sent: %lu, last_pkt_written: %lu\n",
             last_pkt_acked, last_pkt_sent, last_pkt_written);
-        size_t n_new_pkt = NUM_PING - last_pkt_written < NEW_PKT? 
-            NUM_PING - last_pkt_written: NEW_PKT; 
+        size_t n_new_pkt = NUM_PING - last_pkt_written < N_PKT_WRT? 
+            NUM_PING - last_pkt_written: N_PKT_WRT; 
         for(int i = 0; i < n_new_pkt && n_empty_buf > 0; i++) {
             pkt = construct_pkt(flow_id, last_pkt_written + 1);
             buf[(last_pkt_written) % buf_size] = pkt;
