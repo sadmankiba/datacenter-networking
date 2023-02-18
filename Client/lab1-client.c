@@ -25,7 +25,8 @@
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
 
-size_t construct_pkt(struct rte_mbuf *, size_t);
+size_t construct_pkt(size_t);
+size_t get_appl_data();
 
 uint32_t NUM_PING;
 
@@ -36,6 +37,8 @@ uint16_t eth_port_id = 1;
 static uint32_t seconds = 1;
 
 size_t window_len = 10;
+size_t buf_size = 500;
+size_t NEW_PKT = 100;
 
 int flow_size;
 int payload_len = 64;
@@ -278,14 +281,13 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 /* Send and receive packet on an Ethernet port. */
 void lcore_main()
 {
+    /* Data structures for sending */
     struct rte_mbuf *pkts_rcvd[BURST_SIZE];
     struct rte_mbuf *pkt;
-	struct sliding_hdr *sld_h_ack;
     uint16_t nb_rx;
     uint64_t n_pkts_sent = 0;
     size_t header_size;
     
-    // TODO: add in scaffolding for timing/printing out quick statistics
     int outstanding[flow_num];
     uint16_t seq[flow_num];
     size_t flow_id = 0;
@@ -295,19 +297,70 @@ void lcore_main()
         seq[i] = 0;
     } 
 
+    /* Timing variables */
     double lat_cum_ns = 0;
     uint64_t flow_start_time = raw_time_ns();
+
+    /* Sliding window variables */
+    struct rte_mbuf *pkts[buf_size];
+    uint64_t last_pkt_acked = -1;
+    uint64_t last_pkt_sent = -1;
+    uint64_t last_pkt_written = -1;
+    size_t n_empty_buf = buf_size;
+    uint64_t retran[buf_size];
+    uint16_t retran_last_idx = 0;
+    uint16_t window = window_len;
+    uint64_t time_sent[window_len];
+
+    for(int i = 0; i < buf_size; i++)
+        retran[i] = -1;
     
-    /* In each iteration, send a packet and receive an ack. */
-    while (seq[flow_id] < NUM_PING) {
-        /* Allocate a mbuf */
-        pkt = rte_pktmbuf_alloc(mbuf_pool);
-        if (pkt == NULL) {
-            printf("Error allocating tx mbuf\n");
-            return;
+    /* Repeatedly construct packet, retransmit, send data, recv ack. */
+    while (last_pkt_sent < (NUM_PING - 1)) {
+        size_t n_new_pkt = min(NUM_PING - last_pkt_written - 1, NEW_PKT); 
+        for(int i = 0; i < n_new_pkt && n_empty_buf > 0; i++) {
+            pkt = construct_pkt(flow_id, last_pkt_written + 1);
+            buf[(last_pkt_written + 1) % buf_size] = pkt;
+            last_pkt_written += 1;
+            n_empty_buf--;
         }
-        size_t len_pkt = construct_pkt(pkt, flow_id);
-        header_size = len_pkt - payload_len; 
+        /* Retransmit unacked data */
+        for (int i = 0; i < buf_size; i++) {
+            uint16_t retran_idx = (retran_last_idx + i) % buf_size;
+            if(retran[retran_idx] != -1) break;
+            //send
+        }
+
+        /* Send data */
+        while(last_pkt_sent - last_pkt_acked < window) {
+            rte_eth_tx_burst(1, 0, buf[(last_pkt_sent + 1) % buf_size], 1);
+            last_pkt_sent++;
+            time_sent[last_pkt_sent % window_len] = raw_time_ns();
+        }
+
+        /* Recv data */
+        while((nb_rx = rte_eth_rx_burst(1, 0, pkts_rcvd, BURST_SIZE)) != 0) {
+            uint64_t time_recvd = raw_time_ns();
+            for (int i = 0; i < nb_rx; i++) {
+                int p = parse_packet(&src, &dst, &recv_ack, &payload, &payload_length, pkts_rcvd[i]);
+                if (p != 0) {
+                    if (recv_ack > last_pkt_acked) {
+                        uint64_t lat_ns = time_sent[recv_ack % window_len] - time_recvd;
+                        last_pkt_acked = recv_ack;
+                        n_pkts_sent++;
+                        lat_cum_ns += lat_ns;
+                    }
+                }
+            }
+        }
+        n_empty_buf = last_pkt_written - last_pkt_acked;
+    }
+
+    /* In each iteration, send a packet and receive an ack. */
+    if(false) {
+    while (seq[flow_id] < NUM_PING) {
+        pkt = construct_pkt(flow_id);
+        header_size = pkt->pkt_len - payload_len; 
 
         int pkts_sent = 0;
        
@@ -347,6 +400,7 @@ void lcore_main()
 
         flow_id = (flow_id + 1) % flow_num;
     }
+    }
     /* latency in us */
     printf("%f, ", (1.0 * lat_cum_ns) / ( n_pkts_sent * 1000)); 
     
@@ -354,7 +408,13 @@ void lcore_main()
     printf("%f", (1.0 * n_pkts_sent * (header_size + payload_len) * 8) / time_now_ns(flow_start_time));
 }
 
-size_t construct_pkt(struct rte_mbuf *pkt, size_t flow_id) {
+struct rte_mbuf * construct_pkt(size_t flow_id, uint32_t sent_seq) {
+    /* Allocate a mbuf */
+    struct rte_mbuf *pkt = rte_pktmbuf_alloc(mbuf_pool);
+    if (pkt == NULL) {
+        printf("Error allocating tx mbuf\n");
+        return NULL;
+    }
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
     struct rte_tcp_hdr *tcp_hdr;
@@ -402,7 +462,7 @@ size_t construct_pkt(struct rte_mbuf *pkt, size_t flow_id) {
     uint16_t dstp = 5001 + flow_id;
     tcp_hdr->src_port = rte_cpu_to_be_16(srcp);
     tcp_hdr->dst_port = rte_cpu_to_be_16(dstp);
-    tcp_hdr->sent_seq = 0;
+    tcp_hdr->sent_seq = sent_seq;
     tcp_hdr->recv_ack = 0;
     tcp_hdr->data_off = 0;
     tcp_hdr->tcp_flags = 0;
@@ -421,7 +481,7 @@ size_t construct_pkt(struct rte_mbuf *pkt, size_t flow_id) {
     pkt->pkt_len = header_size + payload_len;
     pkt->nb_segs = 1;
 
-    return header_size + payload_len;
+    return pkt;
 }
 
 /*
@@ -478,4 +538,8 @@ int main(int argc, char *argv[])
 	rte_eal_cleanup();
 
 	return 0;
+}
+
+size_t get_appl_data() {
+    return 100;
 }
