@@ -12,6 +12,7 @@
 #include <rte_cycles.h>
 #include <rte_lcore.h>
 #include <rte_mbuf.h>
+#include <rte_mempool.h>
 #include "debug.h"
 
 #define RX_RING_SIZE 1024
@@ -339,9 +340,15 @@ void lcore_main(void)
 				
 				rcvd[rfid] = true;
 				seq = get_seq(pkt);
-				if (seq >= nxt_pkt_expcd[rfid] && buf[rfid][(seq - 1) % BUF_SIZE] == NULL) {
+				if (seq >= nxt_pkt_expcd[rfid]) {
+					if(buf[rfid][(seq - 1) % BUF_SIZE] != NULL) {
+						rte_pktmbuf_free(buf[rfid][(seq - 1) % BUF_SIZE]);
+					} else {
+						n_buf_pkts[rfid]++;
+					}
 					buf[rfid][(seq - 1) % BUF_SIZE] = pkt;
-					n_buf_pkts[rfid]++;
+				} else {
+					rte_pktmbuf_free(pkt);
 				}
 				if (seq > last_pkt_recvd[rfid])
 					last_pkt_recvd[rfid] = seq;
@@ -425,9 +432,12 @@ struct rte_mbuf * construct_ack(struct rte_mbuf *pkt, uint8_t fid, uint32_t ack_
 
 	/* Allocate ack packet */
 	ack = rte_pktmbuf_alloc(mbuf_pool);
-	if (ack == NULL) {
+	while (ack == NULL) {
 		printf("Error allocating tx mbuf\n");
-		return NULL;
+		// rte_mempool_free(mbuf_pool);
+		mbuf_pool = rte_pktmbuf_pool_create("MBUF_POOL", NUM_MBUFS * 1,
+			MBUF_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
+		ack = rte_pktmbuf_alloc(mbuf_pool);
 	}
 	size_t header_size = 0;
 
