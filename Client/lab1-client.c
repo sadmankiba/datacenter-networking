@@ -351,34 +351,37 @@ void lcore_main()
             }
         }
 
-        /* Populate buf */
+        /* Populate buf to fill full */
         debug_buf0(buf);
         debug("Populating buf\n");
         for(uint8_t fid = 0; fid < flow_num; fid++) {
             for (uint32_t i = 0; i < BUF_SIZE; i++) {
-                if(buf[fid][last_pkt_written[fid] % BUF_SIZE] == NULL 
-                    && last_pkt_written[fid] < NUM_PING) {
+                if (last_pkt_written[fid] >= NUM_PING) continue;
+
+                if(buf[fid][last_pkt_written[fid] % BUF_SIZE] == NULL) {
                     buf[fid][last_pkt_written[fid] % BUF_SIZE] = \
                         construct_pkt(fid, last_pkt_written[fid] + 1);
                     last_pkt_written[fid]++;
                     n_empty_buf[fid]--;
+                } else break;
+            }
+            /* Verifying buf */
+            for(uint32_t i = 0; i < BUF_SIZE; i++) {
+                pkt = buf[fid][(last_pkt_acked[fid] + i) % BUF_SIZE];
+                if(last_pkt_acked[fid] + i >= NUM_PING) break;
+
+                seq = get_seq(pkt);
+                if (seq != last_pkt_acked[fid] + i + 1) {
+                    if (seq == last_pkt_written[fid]) last_pkt_written[fid]--;
+
+                    rte_pktmbuf_free(buf[fid][(last_pkt_acked[fid] + i) % BUF_SIZE]);
+                    buf[fid][(last_pkt_acked[fid] + i) % BUF_SIZE] = \
+                        construct_pkt(fid, last_pkt_acked[fid] + i + 1);
+                    
                 }
             }
         }
         debug_buf0(buf);
-        
-        if(false) {
-        for(uint8_t fid = 0; fid < flow_num; fid++) {
-            n_new_pkt[fid] = NUM_PING - last_pkt_written[fid] < BUF_SIZE? 
-                NUM_PING - last_pkt_written[fid]: BUF_SIZE; 
-            for(uint8_t i = 0; i < n_new_pkt[fid] && n_empty_buf[fid] > 0; i++) {
-                pkt = construct_pkt(fid, last_pkt_written[fid] + 1);
-                buf[fid][(last_pkt_written[fid]) % BUF_SIZE] = pkt;
-                last_pkt_written[fid] += 1;
-                n_empty_buf[fid]--;
-            }
-        }
-        }
 
         /* Send data */
         for (uint8_t fid = 0; fid < flow_num; fid++) {
