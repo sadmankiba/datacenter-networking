@@ -318,6 +318,18 @@ void lcore_main()
         }
         debug("\n");
         */
+        
+        /* Retransmit unacked data */
+        for (uint8_t fid = 0; fid < flow_num; fid++) {
+            for (uint64_t i = last_pkt_acked[fid] + 1; i < last_pkt_written[fid]; i++) {
+                if(raw_time_ns() - time_sent[fid][i % MBUF_CACHE_SIZE] > (5 * 1000 * 1000)) { /* 5 ms */
+                    pkt = construct_pkt(fid, i);
+                    rte_eth_tx_burst(1, 0, &pkt, 1);
+                    debug("retransmitted fid %u seq %lu\n", fid, i);
+                }
+            }
+        }
+
         /* Populate buf */
         for(uint8_t fid = 0; fid < flow_num; fid++) {
             n_new_pkt[fid] = NUM_PING - last_pkt_written[fid] < N_PKT_WRT? 
@@ -328,14 +340,6 @@ void lcore_main()
                 last_pkt_written[fid] += 1;
                 n_empty_buf[fid]--;
             }
-        }
-        
-
-        /* Retransmit unacked data */
-        for (int i = 0; i < MBUF_CACHE_SIZE; i++) {
-            uint16_t retran_idx = (retran_last_idx + i) % MBUF_CACHE_SIZE;
-            if(retran[retran_idx] != -1) break;
-            //send
         }
 
         /* Send data */

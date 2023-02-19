@@ -18,7 +18,7 @@ all: shared
 .PHONY: shared static
 
 run:
-	echo "Flow size $(FLOW_SIZE)"
+	echo "Flow num $(FLOW_NUM), Flow size $(FLOW_SIZE)"
 	cd build && ./lab1-client $(FLOW_NUM) $(FLOW_SIZE)
 
 shared: build/$(APP)-shared
