@@ -18,10 +18,11 @@
 #define TX_RING_SIZE 1024
 #define ETH_PORT_ID 1
 
-#define NUM_MBUFS 8191
-#define MBUF_CACHE_SIZE 250
-#define BURST_SIZE 512
-#define N_PKT_READ 100
+#define NUM_MBUFS 65535
+#define MBUF_CACHE_SIZE 512
+#define BUF_SIZE 1024
+#define BURST_SIZE 1024
+#define N_PKT_READ 1024
 #define STOP_FLOW_ID 100
 #define MAX_FLOW_NUM 8
 
@@ -264,7 +265,6 @@ void lcore_main(void)
 	struct rte_mbuf *pkt;
 	struct rte_mbuf *ack;
 	uint8_t new_acks = 0;
-	struct rte_mbuf *acks[BURST_SIZE];
 
 	uint8_t n_rcvd;
 	
@@ -273,13 +273,14 @@ void lcore_main(void)
 	uint64_t nxt_pkt_expcd[MAX_FLOW_NUM];
 	uint64_t last_pkt_recvd[MAX_FLOW_NUM] = {0};
 	uint64_t n_buf_pkts[MAX_FLOW_NUM] = {0};
-	struct rte_mbuf *buf[MAX_FLOW_NUM][MBUF_CACHE_SIZE];
+	struct rte_mbuf *buf[MAX_FLOW_NUM][BUF_SIZE];
 	uint32_t seq;
 	uint8_t pkts_to_cnsm[MAX_FLOW_NUM];
+	struct rte_mbuf *snd_pkts[MAX_FLOW_NUM];
 
 	for (uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
 		nxt_pkt_expcd[fid] = 1;
-		for(uint16_t i = 0; i < MBUF_CACHE_SIZE; i++) {
+		for(uint16_t i = 0; i < BUF_SIZE; i++) {
 			buf[fid][i] = NULL;
 		}
 	}
@@ -293,7 +294,8 @@ void lcore_main(void)
 		for (uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
 			pkts_to_cnsm[fid] = (n_buf_pkts[fid] < N_PKT_READ)? n_buf_pkts[fid]: N_PKT_READ;
 			for (int i = 0; i < pkts_to_cnsm[fid]; i++) {
-				buf[fid][(last_pkt_read[fid] + i) % MBUF_CACHE_SIZE] = NULL;
+				rte_pktmbuf_free(buf[fid][(last_pkt_read[fid] + i) % BUF_SIZE]);
+				buf[fid][(last_pkt_read[fid] + i) % BUF_SIZE] = NULL;
 				n_buf_pkts[fid]--;
 			}
 
@@ -327,8 +329,8 @@ void lcore_main(void)
 			flow_pkt_rcvd = true;
 			rcvd[rfid] = true;
 			seq = get_seq(pkt);
-			if (buf[rfid][(seq - 1) % MBUF_CACHE_SIZE] == NULL) {
-				buf[rfid][(seq - 1) % MBUF_CACHE_SIZE] = pkt;
+			if (buf[rfid][(seq - 1) % BUF_SIZE] == NULL) {
+				buf[rfid][(seq - 1) % BUF_SIZE] = pkt;
 				n_buf_pkts[rfid]++;
 			}
 			if (seq > last_pkt_recvd[rfid])
@@ -338,26 +340,31 @@ void lcore_main(void)
 		if (!flow_pkt_rcvd) continue;
 
 		int new_seqd_pkt[MAX_FLOW_NUM] = {0};
+		uint8_t n_snd = 0;
 		for (uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
 			/* Find the highest seq packet rcvd */
-			while(buf[fid][(nxt_pkt_expcd[fid] - 1 + new_seqd_pkt[fid]) % MBUF_CACHE_SIZE] != NULL 
-				&& new_seqd_pkt[fid] < MBUF_CACHE_SIZE) 
+			while(buf[fid][(nxt_pkt_expcd[fid] - 1 + new_seqd_pkt[fid]) % BUF_SIZE] != NULL 
+				&& new_seqd_pkt[fid] < BUF_SIZE) 
 				new_seqd_pkt[fid]++;
 
 			if(rcvd[fid] == false) continue;
 			nxt_pkt_expcd[fid] += new_seqd_pkt[fid];
 
 			/* Construct an ack packet for (nxt_pkt_expcd - 1). */
-			ack = construct_ack(rcvd_pkts[0], nxt_pkt_expcd[fid] - 1, MBUF_CACHE_SIZE - n_buf_pkts[fid]);	
+			ack = construct_ack(rcvd_pkts[0], nxt_pkt_expcd[fid] - 1, BUF_SIZE - n_buf_pkts[fid]);	
 			
 			for (int i = 0; i < n_rcvd; i++) {	
 				rte_pktmbuf_free(rcvd_pkts[i]);
 			}
-
+			if(ack == NULL) continue;
 			/* Send back ack. */
-			rte_eth_tx_burst(ETH_PORT_ID, 0, &ack, 1);
-			debug("Sent flow %u, ack %lu\n", fid, nxt_pkt_expcd[fid] - 1);
+			snd_pkts[n_snd++] = ack;
+			debug("Will send flow %u, ack %lu\n", fid, nxt_pkt_expcd[fid] - 1);
 		}
+		rte_eth_tx_burst(ETH_PORT_ID, 0, snd_pkts, n_snd);
+		for(uint16_t i = 0; i < n_snd; i++)
+			rte_pktmbuf_free(snd_pkts[i]);
+		
 		debug("last_pkt_read: "); 
         for(uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
             debug("%lu, ", last_pkt_read[fid]);
