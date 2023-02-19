@@ -19,7 +19,7 @@ all: shared
 
 run:
 	echo "Flow size $(FLOW_SIZE)"
-	cd build && ./lab1-client 1 $(FLOW_SIZE)
+	cd build && ./lab1-client $(FLOW_NUM) $(FLOW_SIZE)
 
 shared: build/$(APP)-shared
 	ln -sf $(APP)-shared build/$(APP)
