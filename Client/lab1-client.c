@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <math.h>
 #include <rte_eal.h>
 #include <rte_ethdev.h>
 #include <rte_cycles.h>
@@ -21,11 +22,12 @@
 #define RX_RING_SIZE 1024
 #define TX_RING_SIZE 1024
 
-#define NUM_MBUFS 8191
-#define MBUF_CACHE_SIZE 250
-#define TX_BURST_SIZE 512
-#define RX_BURST_SIZE 32
-#define N_PKT_WRT 100
+#define NUM_MBUFS 16383
+#define MBUF_CACHE_SIZE 512
+#define BUF_SIZE 1024
+#define TX_BURST_SIZE 1024
+#define RX_BURST_SIZE 64
+#define N_PKT_WRT 1024
 #define STOP_FLOW_ID 100
 #define MAX_FLOW_NUM 8
 
@@ -162,7 +164,7 @@ static int parse_packet(uint64_t *recv_ack, uint32_t *rcv_wnd, struct rte_mbuf *
     
     *recv_ack = tcp_hdr->recv_ack;
     *rcv_wnd = tcp_hdr->rx_win;
-    debug("Parsed pkt flow %u, ack %u\n", ret - 1, *recv_ack);
+    debug("Parsed pkt flow %u, ack %lu\n", ret - 1, *recv_ack);
     return ret;
 }
 
@@ -266,26 +268,25 @@ void lcore_main()
     size_t header_size;
 
     /* Sliding window variables */
-    struct rte_mbuf *buf[MAX_FLOW_NUM][MBUF_CACHE_SIZE];
+    struct rte_mbuf *buf[MAX_FLOW_NUM][BUF_SIZE];
+    struct rte_mbuf *send_pkts[BUF_SIZE];
     uint32_t last_pkt_acked[MAX_FLOW_NUM] = {0}; /* 1-indexed */
     uint32_t last_pkt_sent[MAX_FLOW_NUM] = {0};
     uint32_t last_pkt_written[MAX_FLOW_NUM] = {0};
     uint32_t recv_ack[MAX_FLOW_NUM] = {0};
     uint32_t n_empty_buf[MAX_FLOW_NUM];
-    uint64_t retran[MBUF_CACHE_SIZE];
-    uint16_t retran_last_idx = {0};
-    uint64_t time_sent[MAX_FLOW_NUM][MBUF_CACHE_SIZE];
+    uint64_t retr[BUF_SIZE];
+    uint64_t time_sent[MAX_FLOW_NUM][BUF_SIZE];
     uint32_t rcv_wnd[MAX_FLOW_NUM];
     uint16_t n_new_pkt[MAX_FLOW_NUM];
 
     for (uint8_t fid=0; fid < MAX_FLOW_NUM; fid++) {
-        n_empty_buf[fid] = MBUF_CACHE_SIZE;
-        rcv_wnd[fid] = MBUF_CACHE_SIZE;
+        n_empty_buf[fid] = BUF_SIZE;
+        rcv_wnd[fid] = BUF_SIZE;
+        for (uint16_t i = 0; i < BUF_SIZE; i++) {
+            time_sent[fid][i] = pow(2, 63);
+        }
     }
-    for(int i = 0; i < MBUF_CACHE_SIZE; i++)
-        retran[i] = -1;
-    
-
     
     /* Timing variables */
     uint64_t lat_cum_us[MAX_FLOW_NUM] = {0};
@@ -302,7 +303,7 @@ void lcore_main()
                 rpt = true;
         }
         if(!rpt) break;
-        /*
+        
         debug("---New iter---\n"); 
         debug("last_pkt_acked: "); 
         for(uint8_t fid = 0; fid < flow_num; fid++) {
@@ -317,18 +318,30 @@ void lcore_main()
             debug("%u, ", last_pkt_written[fid]);
         }
         debug("\n");
-        */
+        
         
         /* Retransmit unacked data */
+        uint32_t n_snd;
         for (uint8_t fid = 0; fid < flow_num; fid++) {
-            for (uint64_t i = last_pkt_acked[fid] + 1; i < last_pkt_written[fid]; i++) {
-                if(raw_time_ns() - time_sent[fid][i % MBUF_CACHE_SIZE] > (5 * 1000 * 1000)) { /* 5 ms */
+            n_snd = 0;
+            for (uint64_t i = last_pkt_acked[fid] + 1; i <= last_pkt_written[fid]; i++) {
+                if((raw_time_ns() - time_sent[fid][(i-1) % BUF_SIZE]) > (1 * 1000 * 1000)) { /* 1 ms */
                     pkt = construct_pkt(fid, i);
-                    rte_eth_tx_burst(1, 0, &pkt, 1);
-                    debug("retransmitted fid %u seq %lu\n", fid, i);
+                    send_pkts[n_snd] = pkt;
+                    retr[n_snd] = i;
+                    n_snd++;        
                 }
             }
+            if (n_snd > 0) {
+                rte_eth_tx_burst(1, 0, send_pkts, n_snd);
+                debug("retransmitted fid %u, n_snd %u\n", fid, n_snd);
+            }
+            for(uint16_t i = 0; i < n_snd; i++) {
+                time_sent[fid][(retr[i] - 1) % BUF_SIZE] = raw_time_ns();
+                rte_pktmbuf_free(send_pkts[i]);
+            }
         }
+        debug("Retr done\n");
 
         /* Populate buf */
         for(uint8_t fid = 0; fid < flow_num; fid++) {
@@ -336,22 +349,30 @@ void lcore_main()
                 NUM_PING - last_pkt_written[fid]: N_PKT_WRT; 
             for(uint8_t i = 0; i < n_new_pkt[fid] && n_empty_buf[fid] > 0; i++) {
                 pkt = construct_pkt(fid, last_pkt_written[fid] + 1);
-                buf[fid][(last_pkt_written[fid]) % MBUF_CACHE_SIZE] = pkt;
+                buf[fid][(last_pkt_written[fid]) % BUF_SIZE] = pkt;
                 last_pkt_written[fid] += 1;
                 n_empty_buf[fid]--;
             }
         }
+        debug("Pop done\n");
 
         /* Send data */
         for (uint8_t fid = 0; fid < flow_num; fid++) {
+            n_snd = 0;
             while((last_pkt_sent[fid] - last_pkt_acked[fid] < rcv_wnd[fid]) 
                 && (last_pkt_sent[fid] < last_pkt_written[fid])) {
-                rte_eth_tx_burst(1, 0, &(buf[fid][(last_pkt_sent[fid]) % MBUF_CACHE_SIZE]), 1);
-                time_sent[fid][last_pkt_sent[fid] % MBUF_CACHE_SIZE] = raw_time_ns();
-                last_pkt_sent[fid]++;
-                debug("Sent flow %u, pkt seq %u\n", fid, last_pkt_sent[fid]);
+                    send_pkts[n_snd++] = buf[fid][(last_pkt_sent[fid]) % BUF_SIZE];
+                    last_pkt_sent[fid]++;
+            }
+            if(n_snd > 0) {
+                rte_eth_tx_burst(1, 0, send_pkts, n_snd);
+                time_sent[fid][last_pkt_sent[fid] % BUF_SIZE] = raw_time_ns();
+                for(uint32_t i = 0; i < n_snd; i ++)
+                    rte_pktmbuf_free(send_pkts[i]);
+                debug("Sent flow %u, n_snd %u, last pkt seq %u\n", fid, n_snd, last_pkt_sent[fid]);
             }
         }
+        debug("Send done\n");
 
         /* Recv data */
         uint32_t recv_ack_p, rcv_wnd_p;
@@ -371,7 +392,7 @@ void lcore_main()
                         debug("Received fid %u, ack %u\n", rfid, recv_ack[rfid]);
                         n_empty_buf[rfid] += (recv_ack[rfid] - last_pkt_acked[rfid]);
                         n_pkts_acked[rfid] += (recv_ack[rfid] - last_pkt_acked[rfid]);
-                        lat_ns = time_recvd - time_sent[rfid][(recv_ack[rfid] - 1) % MBUF_CACHE_SIZE];
+                        lat_ns = time_recvd - time_sent[rfid][(recv_ack[rfid] - 1) % BUF_SIZE];
                         lat_cum_us[rfid] += (uint64_t) (lat_ns 
                             * (recv_ack - last_pkt_acked) * 1.0 / 1000);
                         last_pkt_acked[rfid] = recv_ack[rfid];
@@ -380,7 +401,7 @@ void lcore_main()
                 rte_pktmbuf_free(pkts_rcvd[i]);
             }
         }
-        /*
+        
         debug("n_pkts_acked: "); 
         for(uint8_t fid = 0; fid < flow_num; fid++) {
             debug("%lu, ", n_pkts_acked[fid]);
@@ -398,7 +419,6 @@ void lcore_main()
             debug("%u, ", rcv_wnd[fid]);
         }
         debug("\n");
-        */
     }
 
     /* latency in us */
