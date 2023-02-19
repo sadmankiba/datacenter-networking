@@ -394,7 +394,7 @@ void lcore_main()
                         n_pkts_acked[rfid] += (recv_ack[rfid] - last_pkt_acked[rfid]);
                         lat_ns = time_recvd - time_sent[rfid][(recv_ack[rfid] - 1) % BUF_SIZE];
                         lat_cum_us[rfid] += (uint64_t) (lat_ns 
-                            * (recv_ack - last_pkt_acked) * 1.0 / 1000);
+                            * (recv_ack[rfid] - last_pkt_acked[rfid]) * 1.0 / 1000);
                         last_pkt_acked[rfid] = recv_ack[rfid];
                     }
                 }
