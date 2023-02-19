@@ -237,6 +237,15 @@ uint8_t verify_pkt(struct rte_mbuf *pkt)
 	return ret;
 }
 
+void debug_buf0(struct rte_mbuf *buf[][BUF_SIZE]) {
+	debug("buffer: ");
+	
+	for (uint16_t i = 0; i < BUF_SIZE; i++) {
+		debug("%u, ", get_seq(buf[0][i]));
+	}
+	debug("\n");
+}
+
 /* Receive packets on Ethernet port and reply ack packet. */
 void lcore_main(void)
 {
@@ -273,6 +282,7 @@ void lcore_main(void)
 	uint32_t seq;
 	uint8_t pkts_to_cnsm[MAX_FLOW_NUM];
 	struct rte_mbuf *snd_pkts[MAX_FLOW_NUM];
+	uint32_t prev_read;
 
 	for (uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
 		nxt_pkt_expcd[fid] = 1;
@@ -287,15 +297,21 @@ void lcore_main(void)
 	 */ 
 	for (;;) {
 		/* Read buf */
-		for (uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
-			pkts_to_cnsm[fid] = (n_buf_pkts[fid] < N_PKT_READ)? n_buf_pkts[fid]: N_PKT_READ;
-			for (uint32_t i = 0; i < pkts_to_cnsm[fid]; i++) {
-				// rte_pktmbuf_free(buf[fid][(last_pkt_read[fid] + i) % BUF_SIZE]);
-				buf[fid][(last_pkt_read[fid] + i) % BUF_SIZE] = NULL;
-				n_buf_pkts[fid]--;
-			}
+		for(uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
+			prev_read = last_pkt_read[fid];
+			for(uint32_t i = 0; i < BUF_SIZE; i++) {
+				pkt = buf[fid][(prev_read + i) % BUF_SIZE];
+				if (pkt == NULL) continue;
 
-			last_pkt_read[fid] += pkts_to_cnsm[fid];
+				seq = get_seq(pkt);
+				if (seq == last_pkt_read[fid] + 1)
+					last_pkt_read[fid]++;
+				if (seq <= last_pkt_read[fid] + 1) {
+					rte_pktmbuf_free(pkt);
+					n_buf_pkts[fid]--;
+					buf[fid][(prev_read + i) % BUF_SIZE] = NULL;
+				}
+			}
 		}
 		
 		bool rcvd[MAX_FLOW_NUM] = {0};
@@ -360,9 +376,10 @@ void lcore_main(void)
 			snd_pkts[n_snd++] = ack;
 			debug("Will send flow %u, ack %u\n", fid, nxt_pkt_expcd[fid] - 1);
 		}
-		for (uint32_t i = 0; i < n_rcvd; i++) {	
-			rte_pktmbuf_free(rcvd_pkts[i]);
-		}
+		
+		// for (uint32_t i = 0; i < n_rcvd; i++) {	
+		// 	rte_pktmbuf_free(rcvd_pkts[i]);
+		// }
 		
 		rte_eth_tx_burst(ETH_PORT_ID, 0, snd_pkts, n_snd);
 		for(uint16_t i = 0; i < n_snd; i++)
@@ -385,6 +402,7 @@ void lcore_main(void)
             debug("%u, ", n_buf_pkts[fid]);
         }
 		debug("\n");
+		debug_buf0(buf);
 	}
 }
 
@@ -468,6 +486,8 @@ struct rte_mbuf * construct_ack(struct rte_mbuf *pkt, uint8_t fid, uint32_t ack_
 }
 
 uint32_t get_seq(struct rte_mbuf *pkt) {
+	if(pkt == NULL) return 0;
+
 	uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
 
 	p += sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr);
