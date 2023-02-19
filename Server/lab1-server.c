@@ -20,8 +20,8 @@
 
 #define NUM_MBUFS 65535
 #define MBUF_CACHE_SIZE 512
-#define BUF_SIZE 1024
-#define BURST_SIZE 256
+#define BUF_SIZE 128
+#define BURST_SIZE 1024
 #define N_PKT_READ 1024
 #define STOP_FLOW_ID 100
 #define MAX_FLOW_NUM 8
@@ -175,7 +175,6 @@ uint8_t verify_pkt(struct rte_mbuf *pkt)
 	 * Packet layout order is (from outside -> in):
      * ether_hdr | ipv4_hdr | tcp_hdr | payload
 	 */
-	debug("Parsing packet\n");
 
     uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
     size_t header_size = 0;
@@ -266,10 +265,10 @@ void lcore_main(void)
 	uint32_t n_rcvd;
 	
 	/* Sliding window receiving variables */
-	uint64_t last_pkt_read[MAX_FLOW_NUM] = {0}; /* 1-indexed */
-	uint64_t nxt_pkt_expcd[MAX_FLOW_NUM];
-	uint64_t last_pkt_recvd[MAX_FLOW_NUM] = {0};
-	uint64_t n_buf_pkts[MAX_FLOW_NUM] = {0};
+	uint32_t last_pkt_read[MAX_FLOW_NUM] = {0}; /* 1-indexed */
+	uint32_t nxt_pkt_expcd[MAX_FLOW_NUM];
+	uint32_t last_pkt_recvd[MAX_FLOW_NUM] = {0};
+	uint32_t n_buf_pkts[MAX_FLOW_NUM] = {0};
 	struct rte_mbuf *buf[MAX_FLOW_NUM][BUF_SIZE];
 	uint32_t seq;
 	uint8_t pkts_to_cnsm[MAX_FLOW_NUM];
@@ -290,7 +289,7 @@ void lcore_main(void)
 		/* Read buf */
 		for (uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
 			pkts_to_cnsm[fid] = (n_buf_pkts[fid] < N_PKT_READ)? n_buf_pkts[fid]: N_PKT_READ;
-			for (int i = 0; i < pkts_to_cnsm[fid]; i++) {
+			for (uint32_t i = 0; i < pkts_to_cnsm[fid]; i++) {
 				// rte_pktmbuf_free(buf[fid][(last_pkt_read[fid] + i) % BUF_SIZE]);
 				buf[fid][(last_pkt_read[fid] + i) % BUF_SIZE] = NULL;
 				n_buf_pkts[fid]--;
@@ -324,7 +323,7 @@ void lcore_main(void)
 				
 				rcvd[rfid] = true;
 				seq = get_seq(pkt);
-				if (buf[rfid][(seq - 1) % BUF_SIZE] == NULL) {
+				if (seq >= nxt_pkt_expcd[rfid] && buf[rfid][(seq - 1) % BUF_SIZE] == NULL) {
 					buf[rfid][(seq - 1) % BUF_SIZE] = pkt;
 					n_buf_pkts[rfid]++;
 				}
@@ -339,12 +338,17 @@ void lcore_main(void)
 		int new_seqd_pkt[MAX_FLOW_NUM] = {0};
 		uint8_t n_snd = 0;
 		for (uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
-			/* Find the highest seq packet rcvd */
-			while(buf[fid][(nxt_pkt_expcd[fid] - 1 + new_seqd_pkt[fid]) % BUF_SIZE] != NULL 
-				&& new_seqd_pkt[fid] < BUF_SIZE) 
-				new_seqd_pkt[fid]++;
-
 			if(rcvd[fid] == false) continue;
+			
+			/* Find the highest seq packet rcvd */
+			while(true) {
+				pkt = buf[fid][(nxt_pkt_expcd[fid] - 1 + new_seqd_pkt[fid]) % BUF_SIZE];
+				if (pkt != NULL && get_seq(pkt) == (nxt_pkt_expcd[fid] + new_seqd_pkt[fid])
+					&& new_seqd_pkt[fid] < BUF_SIZE) 
+					new_seqd_pkt[fid]++;
+				else break;
+			}
+			
 			nxt_pkt_expcd[fid] += new_seqd_pkt[fid];
 
 			/* Construct an ack packet for (nxt_pkt_expcd - 1). */
@@ -354,9 +358,9 @@ void lcore_main(void)
 			if(ack == NULL) continue;
 			/* Send back ack. */
 			snd_pkts[n_snd++] = ack;
-			debug("Will send flow %u, ack %lu\n", fid, nxt_pkt_expcd[fid] - 1);
+			debug("Will send flow %u, ack %u\n", fid, nxt_pkt_expcd[fid] - 1);
 		}
-		for (int i = 0; i < n_rcvd; i++) {	
+		for (uint32_t i = 0; i < n_rcvd; i++) {	
 			rte_pktmbuf_free(rcvd_pkts[i]);
 		}
 		
@@ -366,19 +370,19 @@ void lcore_main(void)
 		
 		debug("last_pkt_read: "); 
         for(uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
-            debug("%lu, ", last_pkt_read[fid]);
+            debug("%u, ", last_pkt_read[fid]);
         }
 		debug("nxt_pkt_expcd: "); 
         for(uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
-            debug("%lu, ", nxt_pkt_expcd[fid]);
+            debug("%u, ", nxt_pkt_expcd[fid]);
         }
 		debug("last_pkt_recvd: "); 
         for(uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
-            debug("%lu, ", last_pkt_recvd[fid]);
+            debug("%u, ", last_pkt_recvd[fid]);
         }
 		debug("n_buf_pkts: "); 
         for(uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
-            debug("%lu, ", n_buf_pkts[fid]);
+            debug("%u, ", n_buf_pkts[fid]);
         }
 		debug("\n");
 	}
