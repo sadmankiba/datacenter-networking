@@ -25,6 +25,7 @@
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
 #define N_PKT_WRT 100
+#define STOP_FLOW_ID 100
 
 struct rte_mbuf * construct_pkt(size_t, uint32_t);
 size_t get_appl_data();
@@ -281,10 +282,10 @@ void lcore_main()
 
     /* Sliding window variables */
     struct rte_mbuf *buf[MBUF_CACHE_SIZE];
-    uint64_t last_pkt_acked = 0; /* 1-indexed */
-    uint64_t last_pkt_sent = 0;
-    uint64_t last_pkt_written = 0;
-    uint64_t recv_ack = 0;
+    uint32_t last_pkt_acked = 0; /* 1-indexed */
+    uint32_t last_pkt_sent = 0;
+    uint32_t last_pkt_written = 0;
+    uint32_t recv_ack = 0;
     size_t n_empty_buf = MBUF_CACHE_SIZE;
     uint64_t retran[MBUF_CACHE_SIZE];
     uint16_t retran_last_idx = 0;
@@ -297,7 +298,7 @@ void lcore_main()
     debug("To send %u packets\n", NUM_PING);
     /* Repeatedly construct packet, retransmit, send data, recv ack. */
     while (last_pkt_acked < NUM_PING) {
-        debug("---New iter---\nlast_pkt_acked: %lu, last_pkt_sent: %lu, last_pkt_written: %lu\n",
+        debug("---New iter---\nlast_pkt_acked: %u, last_pkt_sent: %u, last_pkt_written: %u\n",
             last_pkt_acked, last_pkt_sent, last_pkt_written);
         size_t n_new_pkt = NUM_PING - last_pkt_written < N_PKT_WRT? 
             NUM_PING - last_pkt_written: N_PKT_WRT; 
@@ -321,7 +322,7 @@ void lcore_main()
             rte_eth_tx_burst(1, 0, &(buf[(last_pkt_sent) % MBUF_CACHE_SIZE]), 1);
             time_sent[last_pkt_sent % MBUF_CACHE_SIZE] = raw_time_ns();
             last_pkt_sent++;
-            debug("Sent pkt seq %lu\n", last_pkt_sent);
+            debug("Sent pkt seq %u\n", last_pkt_sent);
         }
 
         /* Recv data */
@@ -335,7 +336,7 @@ void lcore_main()
                 int p = parse_packet(&recv_ack, &rcv_wnd, pkts_rcvd[i]);
                 if (p != 0) {
                     if (recv_ack > last_pkt_acked) {
-                        debug("Received ack %lu\n", recv_ack);
+                        debug("Received ack %u\n", recv_ack);
                         n_empty_buf += (recv_ack - last_pkt_acked);
                         n_pkts_acked += (recv_ack - last_pkt_acked);
                         lat_ns = time_recvd - time_sent[(recv_ack - 1) % MBUF_CACHE_SIZE];
@@ -356,6 +357,10 @@ void lcore_main()
     
     /* Bw in Gbps */
     printf("%f", (1.0 * n_pkts_acked * (header_size + payload_len) * 8) / time_now_ns(flow_start_time));
+
+    /* Send special packet to shutdown receiver */
+    pkt = construct_pkt(STOP_FLOW_ID, 0);
+    rte_eth_tx_burst(eth_port_id, 0, &pkt, 1);
 }
 
 struct rte_mbuf * construct_pkt(size_t flow_id, uint32_t sent_seq) {
