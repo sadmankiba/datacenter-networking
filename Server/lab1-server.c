@@ -313,6 +313,7 @@ void lcore_main(void)
 		bool flow_pkt_rcvd = false;
 		uint8_t rfid;
 		uint8_t resp;
+		bool rcvd[MAX_FLOW_NUM] = {0};
 		for(uint8_t i = 0; i < n_rcvd; i++) {
 			pkt = rcvd_pkts[i];
 			resp = verify_pkt(pkt);
@@ -324,6 +325,7 @@ void lcore_main(void)
 			if (rfid == STOP_FLOW_ID) break;
 			
 			flow_pkt_rcvd = true;
+			rcvd[rfid] = true;
 			seq = get_seq(pkt);
 			if (buf[rfid][(seq - 1) % MBUF_CACHE_SIZE] == NULL) {
 				buf[rfid][(seq - 1) % MBUF_CACHE_SIZE] = pkt;
@@ -342,7 +344,7 @@ void lcore_main(void)
 				&& new_seqd_pkt[fid] < MBUF_CACHE_SIZE) 
 				new_seqd_pkt[fid]++;
 
-			if(new_seqd_pkt[fid] == 0) continue;
+			if(rcvd[fid] == false) continue;
 			nxt_pkt_expcd[fid] += new_seqd_pkt[fid];
 
 			/* Construct an ack packet for (nxt_pkt_expcd - 1). */
