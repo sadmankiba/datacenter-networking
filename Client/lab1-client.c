@@ -27,7 +27,6 @@
 #define BUF_SIZE 128
 #define TX_BURST_SIZE 1024
 #define RX_BURST_SIZE 256
-#define N_PKT_WRT 1024
 #define STOP_FLOW_ID 100
 #define MAX_FLOW_NUM 8
 
@@ -344,8 +343,8 @@ void lcore_main()
 
         /* Populate buf */
         for(uint8_t fid = 0; fid < flow_num; fid++) {
-            n_new_pkt[fid] = NUM_PING - last_pkt_written[fid] < N_PKT_WRT? 
-                NUM_PING - last_pkt_written[fid]: N_PKT_WRT; 
+            n_new_pkt[fid] = NUM_PING - last_pkt_written[fid] < BUF_SIZE? 
+                NUM_PING - last_pkt_written[fid]: BUF_SIZE; 
             for(uint8_t i = 0; i < n_new_pkt[fid] && n_empty_buf[fid] > 0; i++) {
                 pkt = construct_pkt(fid, last_pkt_written[fid] + 1);
                 buf[fid][(last_pkt_written[fid]) % BUF_SIZE] = pkt;
@@ -416,7 +415,7 @@ void lcore_main()
             debug("%u, ", rcv_wnd[fid]);
         }
         debug("\n");
-        sleep(5);
+        sleep(2);
     }
 
     /* latency in us */
