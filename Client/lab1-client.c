@@ -35,10 +35,6 @@ uint32_t NUM_PING;
 struct rte_mempool *mbuf_pool = NULL;
 static struct rte_ether_addr my_eth;
 uint16_t eth_port_id = 1;
-static uint32_t seconds = 1;
-
-size_t window_len = 10;
-size_t buf_size = 500;
 
 int flow_size;
 int payload_len = 64;
@@ -98,20 +94,13 @@ uint64_t cycles_elapsed(double timediff) {
 }
 
 /**  
- * Parse a complete TCP packet. Read src IP, dst IP, payload 
- * and payload length from mbuf packet.
+ * Parse a complete TCP packet.
  * 
  * @return
  *   - (0) if not a TCP packet
  *   - (+ve integer) denoting flow id
  */
-static int parse_packet(struct sockaddr_in *src,
-                        struct sockaddr_in *dst,
-                        uint64_t *recv_ack,
-                        void **payload,
-                        size_t *payload_len,
-                        struct rte_mbuf *pkt)
-{
+static int parse_packet(uint64_t *recv_ack, uint32_t *rcv_wnd, struct rte_mbuf *pkt) {
     /* 
      * Packet layout order is (from outside -> in):
      * ether_hdr | ipv4_hdr | tcp_hdr | payload
@@ -138,23 +127,16 @@ static int parse_packet(struct sockaddr_in *src,
     struct rte_ipv4_hdr *const ip_hdr = (struct rte_ipv4_hdr *)(p);
     p += sizeof(*ip_hdr);
     header += sizeof(*ip_hdr);
-    in_addr_t ipv4_src_addr = ip_hdr->src_addr;
-    in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
     if (IPPROTO_TCP != ip_hdr->next_proto_id) {
         return 0;
     }
-    
-    src->sin_addr.s_addr = ipv4_src_addr;
-    dst->sin_addr.s_addr = ipv4_dst_addr;
     
     /* Parse tcp header */
     struct rte_tcp_hdr * const tcp_hdr = (struct rte_tcp_hdr *)(p);
     p += sizeof(*tcp_hdr);
     header += sizeof(*tcp_hdr);
 
-    in_port_t tcp_src_port = tcp_hdr->src_port;
-    in_port_t tcp_dst_port = tcp_hdr->dst_port;
     int ret = 0;
 	
 	uint16_t p1 = rte_cpu_to_be_16(5001);
@@ -178,16 +160,9 @@ static int parse_packet(struct sockaddr_in *src,
 	{
 		ret = 4;
 	}
-
-    src->sin_port = tcp_src_port;
-    dst->sin_port = tcp_dst_port;
-    
-    src->sin_family = AF_INET;
-    dst->sin_family = AF_INET;
     
     *recv_ack = tcp_hdr->recv_ack;
-    *payload_len = pkt->pkt_len - header;
-    *payload = (void *)p;
+    *rcv_wnd = tcp_hdr->rx_win;
     return ret;
 }
 
@@ -298,10 +273,6 @@ void lcore_main()
         outstanding[i] = 0;
         seq[i] = 0;
     } 
-    /* Data structures for receiving */
-    struct sockaddr_in src, dst;
-    void *payload = NULL;
-    size_t recv_pld_len;
 
     /* Timing variables */
     uint64_t lat_cum_us = 0;
@@ -309,18 +280,18 @@ void lcore_main()
     uint64_t lat_ns;
 
     /* Sliding window variables */
-    struct rte_mbuf *buf[buf_size];
+    struct rte_mbuf *buf[MBUF_CACHE_SIZE];
     uint64_t last_pkt_acked = 0; /* 1-indexed */
     uint64_t last_pkt_sent = 0;
     uint64_t last_pkt_written = 0;
     uint64_t recv_ack = 0;
-    size_t n_empty_buf = buf_size;
-    uint64_t retran[buf_size];
+    size_t n_empty_buf = MBUF_CACHE_SIZE;
+    uint64_t retran[MBUF_CACHE_SIZE];
     uint16_t retran_last_idx = 0;
-    uint16_t window = window_len;
-    uint64_t time_sent[window_len];
+    uint64_t time_sent[MBUF_CACHE_SIZE];
+    uint32_t rcv_wnd = MBUF_CACHE_SIZE;
 
-    for(int i = 0; i < buf_size; i++)
+    for(int i = 0; i < MBUF_CACHE_SIZE; i++)
         retran[i] = -1;
     
     debug("To send %u packets\n", NUM_PING);
@@ -332,22 +303,23 @@ void lcore_main()
             NUM_PING - last_pkt_written: N_PKT_WRT; 
         for(int i = 0; i < n_new_pkt && n_empty_buf > 0; i++) {
             pkt = construct_pkt(flow_id, last_pkt_written + 1);
-            buf[(last_pkt_written) % buf_size] = pkt;
+            buf[(last_pkt_written) % MBUF_CACHE_SIZE] = pkt;
             last_pkt_written += 1;
             n_empty_buf--;
         }
+
         /* Retransmit unacked data */
-        for (int i = 0; i < buf_size; i++) {
-            uint16_t retran_idx = (retran_last_idx + i) % buf_size;
+        for (int i = 0; i < MBUF_CACHE_SIZE; i++) {
+            uint16_t retran_idx = (retran_last_idx + i) % MBUF_CACHE_SIZE;
             if(retran[retran_idx] != -1) break;
             //send
         }
 
         /* Send data */
-        while((last_pkt_sent - last_pkt_acked < window) 
+        while((last_pkt_sent - last_pkt_acked < rcv_wnd) 
             && (last_pkt_sent < last_pkt_written)) {
-            rte_eth_tx_burst(1, 0, &(buf[(last_pkt_sent) % buf_size]), 1);
-            time_sent[last_pkt_sent % window_len] = raw_time_ns();
+            rte_eth_tx_burst(1, 0, &(buf[(last_pkt_sent) % MBUF_CACHE_SIZE]), 1);
+            time_sent[last_pkt_sent % MBUF_CACHE_SIZE] = raw_time_ns();
             last_pkt_sent++;
             debug("Sent pkt seq %lu\n", last_pkt_sent);
         }
@@ -360,22 +332,23 @@ void lcore_main()
             if(nb_rx == 0) break;
             
             for (int i = 0; i < nb_rx; i++) {
-                int p = parse_packet(&src, &dst, &recv_ack, &payload, &recv_pld_len, pkts_rcvd[i]);
+                int p = parse_packet(&recv_ack, &rcv_wnd, pkts_rcvd[i]);
                 if (p != 0) {
                     if (recv_ack > last_pkt_acked) {
                         debug("Received ack %lu\n", recv_ack);
                         n_empty_buf += (recv_ack - last_pkt_acked);
+                        n_pkts_acked += (recv_ack - last_pkt_acked);
+                        lat_ns = time_recvd - time_sent[(recv_ack - 1) % MBUF_CACHE_SIZE];
+                        lat_cum_us += (uint64_t) (lat_ns 
+                            * (recv_ack - last_pkt_acked) * 1.0 / 1000);
                         last_pkt_acked = recv_ack;
-                        n_pkts_acked++;
-                        lat_ns = time_recvd - time_sent[recv_ack % window_len];
-                        lat_cum_us += (uint64_t) (lat_ns * 1.0 / 1000);
                     }
                 }
                 rte_pktmbuf_free(pkts_rcvd[i]);
             }
         }
-        debug("n_pkts_acked %lu, lat_cum_us %lu, n_empty_buf %lu\n",
-            n_pkts_acked, lat_cum_us, n_empty_buf);
+        debug("n_pkts_acked %lu, lat_cum_us %lu, n_empty_buf %lu, rcv_wnd %u\n",
+            n_pkts_acked, lat_cum_us, n_empty_buf, rcv_wnd);
     }
 
     /* latency in us */
