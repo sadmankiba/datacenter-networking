@@ -24,9 +24,9 @@
 
 #define NUM_MBUFS 65535
 #define MBUF_CACHE_SIZE 512
-#define BUF_SIZE 1024
+#define BUF_SIZE 128
 #define TX_BURST_SIZE 1024
-#define RX_BURST_SIZE 64
+#define RX_BURST_SIZE 256
 #define N_PKT_WRT 1024
 #define STOP_FLOW_ID 100
 #define MAX_FLOW_NUM 8
@@ -275,7 +275,7 @@ void lcore_main()
     uint32_t last_pkt_written[MAX_FLOW_NUM] = {0};
     uint32_t recv_ack[MAX_FLOW_NUM] = {0};
     uint32_t n_empty_buf[MAX_FLOW_NUM];
-    uint64_t retr[BUF_SIZE];
+    uint32_t retr[BUF_SIZE];
     uint64_t time_sent[MAX_FLOW_NUM][BUF_SIZE];
     uint32_t rcv_wnd[MAX_FLOW_NUM];
     uint16_t n_new_pkt[MAX_FLOW_NUM];
@@ -324,8 +324,8 @@ void lcore_main()
         uint32_t n_snd;
         for (uint8_t fid = 0; fid < flow_num; fid++) {
             n_snd = 0;
-            for (uint64_t i = last_pkt_acked[fid] + 1; i <= last_pkt_written[fid]; i++) {
-                if((raw_time_ns() - time_sent[fid][(i-1) % BUF_SIZE]) > (1 * 1000 * 1000)) { /* 1 ms */
+            for (uint32_t i = last_pkt_acked[fid] + 1; i <= last_pkt_written[fid]; i++) {
+                if((raw_time_ns() - time_sent[fid][(i-1) % BUF_SIZE]) > (5 * 1000 * 1000)) { /* 5 ms */
                     pkt = construct_pkt(fid, i);
                     send_pkts[n_snd] = pkt;
                     retr[n_snd] = i;
@@ -341,7 +341,6 @@ void lcore_main()
                 rte_pktmbuf_free(send_pkts[i]);
             }
         }
-        debug("Retr done\n");
 
         /* Populate buf */
         for(uint8_t fid = 0; fid < flow_num; fid++) {
@@ -354,7 +353,6 @@ void lcore_main()
                 n_empty_buf[fid]--;
             }
         }
-        debug("Pop done\n");
 
         /* Send data */
         for (uint8_t fid = 0; fid < flow_num; fid++) {
@@ -372,7 +370,6 @@ void lcore_main()
                 debug("Sent flow %u, n_snd %u, last pkt seq %u\n", fid, n_snd, last_pkt_sent[fid]);
             }
         }
-        debug("Send done\n");
 
         /* Recv data */
         uint32_t recv_ack_p, rcv_wnd_p;
@@ -412,13 +409,14 @@ void lcore_main()
         }
         debug("n_empty_buf: "); 
         for(uint8_t fid = 0; fid < flow_num; fid++) {
-            debug("%lu, ", n_empty_buf[fid]);
+            debug("%u, ", n_empty_buf[fid]);
         }
         debug("rcv_wnd: "); 
         for(uint8_t fid = 0; fid < flow_num; fid++) {
             debug("%u, ", rcv_wnd[fid]);
         }
         debug("\n");
+        sleep(5);
     }
 
     /* latency in us */
