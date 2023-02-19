@@ -22,6 +22,7 @@
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
 #define N_PKT_READ 100
+#define STOP_FLOW_ID 100
 
 
 struct rte_mbuf * construct_ack(struct rte_mbuf *, uint32_t, uint32_t);
@@ -167,7 +168,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
  *   - (0) if not a TCP packet
  *   - (+ve integer) denoting flow id
  */
-static int verify_pkt(struct rte_mbuf *pkt)
+uint8_t verify_pkt(struct rte_mbuf *pkt)
 {
     /*
 	 * Packet layout order is (from outside -> in):
@@ -209,39 +210,27 @@ static int verify_pkt(struct rte_mbuf *pkt)
     struct rte_tcp_hdr * const tcp_hdr = (struct rte_tcp_hdr *)(p);
     p += sizeof(*tcp_hdr);
     header_size += sizeof(*tcp_hdr);
-    in_port_t tcp_src_port = tcp_hdr->src_port;
-    in_port_t tcp_dst_port = tcp_hdr->dst_port;
-	uint8_t ret = 0;
 	
+	uint8_t ret = 0;
 	uint16_t p1 = rte_cpu_to_be_16(5001);
 	uint16_t p2 = rte_cpu_to_be_16(5002);
 	uint16_t p3 = rte_cpu_to_be_16(5003);
 	uint16_t p4 = rte_cpu_to_be_16(5004);
-	
-	if (tcp_hdr->dst_port ==  p1)
-	{
-		ret = 1;
-	}
-	if (tcp_hdr->dst_port ==  p2)
-	{
-		ret = 2;
-	}
-	if (tcp_hdr->dst_port ==  p3)
-	{
-		ret = 3;
-	}
-	if (tcp_hdr->dst_port ==  p4)
-	{
-		ret = 4;
-	}
+	uint16_t ps = rte_cpu_to_be_16(5001 + STOP_FLOW_ID);
 
-	debug("Parsed packet of flow %u, seq %u\n", ret, tcp_hdr->sent_seq);
+	if (tcp_hdr->dst_port == p1) ret = 1;
+	if (tcp_hdr->dst_port == p2) ret = 2;
+	if (tcp_hdr->dst_port == p3) ret = 3;
+	if (tcp_hdr->dst_port == p4) ret = 4;
+	if (tcp_hdr->dst_port == ps) ret = STOP_FLOW_ID;
+	debug("Parsed packet of flow %u, seq %u\n", 
+			ret, tcp_hdr->sent_seq);
+		
 	return ret;
 }
 
 /* Receive packets on Ethernet port and reply ack packet. */
-static __rte_noreturn void
-lcore_main(void)
+void lcore_main(void)
 {
 	uint16_t port;
 
@@ -303,12 +292,15 @@ lcore_main(void)
 
 		/* Add each rcvd pkt to buffer */
 		bool flow_pkt_rcvd = false;
+		uint8_t resp;
 		for(uint8_t i = 0; i < n_rcvd; i++) {
 			pkt = rcvd_pkts[i];
-			if(verify_pkt(pkt) == 0){
+			resp = verify_pkt(pkt);
+			if(resp == 0) {
 				rte_pktmbuf_free(pkt);
 				continue;
-			}
+			} else if (resp == STOP_FLOW_ID) break;
+			
 			
 			flow_pkt_rcvd = true;
 			seq = get_seq(pkt);
@@ -319,6 +311,7 @@ lcore_main(void)
 			if (seq > last_pkt_recvd)
 				last_pkt_recvd = seq;
 		}
+		if (resp == STOP_FLOW_ID) break;
 		if (!flow_pkt_rcvd) continue;
 
 		/* Find the highest seq packet rcvd */
