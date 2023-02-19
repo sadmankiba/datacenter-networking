@@ -22,7 +22,7 @@
 #define RX_RING_SIZE 1024
 #define TX_RING_SIZE 1024
 
-#define NUM_MBUFS 16383
+#define NUM_MBUFS 65535
 #define MBUF_CACHE_SIZE 512
 #define BUF_SIZE 1024
 #define TX_BURST_SIZE 1024
