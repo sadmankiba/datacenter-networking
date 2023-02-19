@@ -305,33 +305,32 @@ void lcore_main(void)
 			if (port != ETH_PORT_ID)
 				continue;
 			
-			while(true) {
-				n_rcvd = rte_eth_rx_burst(port, 0, rcvd_pkts, BURST_SIZE);
+			n_rcvd = rte_eth_rx_burst(port, 0, rcvd_pkts, BURST_SIZE);
 
-				if (unlikely(n_rcvd == 0))
-					break;
+			if (unlikely(n_rcvd == 0))
+				continue;
 
-				/* Add each rcvd pkt to buffer */
-				uint8_t resp;
-				for(uint8_t i = 0; i < n_rcvd; i++) {
-					pkt = rcvd_pkts[i];
-					resp = verify_pkt(pkt);
-					if(resp == 0) {
-						rte_pktmbuf_free(pkt);
-						continue;
-					} 
-					rfid = resp - 1;
-					if (rfid == STOP_FLOW_ID) break;
-					
-					rcvd[rfid] = true;
-					seq = get_seq(pkt);
-					if (buf[rfid][(seq - 1) % BUF_SIZE] == NULL) {
-						buf[rfid][(seq - 1) % BUF_SIZE] = pkt;
-						n_buf_pkts[rfid]++;
-					}
-					if (seq > last_pkt_recvd[rfid])
-						last_pkt_recvd[rfid] = seq;
+			/* Add each rcvd pkt to buffer */
+			uint8_t resp;
+			for(uint32_t i = 0; i < n_rcvd; i++) {
+				pkt = rcvd_pkts[i];
+				resp = verify_pkt(pkt);
+				if(resp == 0) {
+					rte_pktmbuf_free(pkt);
+					continue;
+				} 
+				rfid = resp - 1;
+				if (rfid == STOP_FLOW_ID) break;
+				
+				rcvd[rfid] = true;
+				seq = get_seq(pkt);
+				if (buf[rfid][(seq - 1) % BUF_SIZE] == NULL) {
+					buf[rfid][(seq - 1) % BUF_SIZE] = pkt;
+					n_buf_pkts[rfid]++;
 				}
+				if (seq > last_pkt_recvd[rfid])
+					last_pkt_recvd[rfid] = seq;
+			
 			}
 		}
 		if (n_rcvd == 0) continue;
