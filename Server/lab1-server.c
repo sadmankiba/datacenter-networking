@@ -21,19 +21,18 @@
 #define NUM_MBUFS 65535
 #define MBUF_CACHE_SIZE 512
 #define BUF_SIZE 1024
-#define BURST_SIZE 1024
+#define BURST_SIZE 256
 #define N_PKT_READ 1024
 #define STOP_FLOW_ID 100
 #define MAX_FLOW_NUM 8
 
 
-struct rte_mbuf * construct_ack(struct rte_mbuf *, uint32_t, uint32_t);
+struct rte_mbuf * construct_ack(struct rte_mbuf *, uint8_t, uint32_t, uint32_t);
 uint32_t get_seq(struct rte_mbuf *);
 
 struct rte_mempool *mbuf_pool = NULL;
 
 static struct rte_ether_addr my_eth;
-size_t window_len = 10;
 
 int ack_len = 10;
 
@@ -264,9 +263,7 @@ void lcore_main(void)
 	struct rte_mbuf *rcvd_pkts[BURST_SIZE];
 	struct rte_mbuf *pkt;
 	struct rte_mbuf *ack;
-	uint8_t new_acks = 0;
-
-	uint8_t n_rcvd;
+	uint32_t n_rcvd;
 	
 	/* Sliding window receiving variables */
 	uint64_t last_pkt_read[MAX_FLOW_NUM] = {0}; /* 1-indexed */
@@ -294,7 +291,7 @@ void lcore_main(void)
 		for (uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
 			pkts_to_cnsm[fid] = (n_buf_pkts[fid] < N_PKT_READ)? n_buf_pkts[fid]: N_PKT_READ;
 			for (int i = 0; i < pkts_to_cnsm[fid]; i++) {
-				rte_pktmbuf_free(buf[fid][(last_pkt_read[fid] + i) % BUF_SIZE]);
+				// rte_pktmbuf_free(buf[fid][(last_pkt_read[fid] + i) % BUF_SIZE]);
 				buf[fid][(last_pkt_read[fid] + i) % BUF_SIZE] = NULL;
 				n_buf_pkts[fid]--;
 			}
@@ -302,42 +299,43 @@ void lcore_main(void)
 			last_pkt_read[fid] += pkts_to_cnsm[fid];
 		}
 		
+		bool rcvd[MAX_FLOW_NUM] = {0};
+		uint8_t rfid;
 		RTE_ETH_FOREACH_DEV(port) {
 			if (port != ETH_PORT_ID)
 				continue;
-			n_rcvd = rte_eth_rx_burst(port, 0, rcvd_pkts, BURST_SIZE);
-		}
-
-		if (unlikely(n_rcvd == 0))
-			continue;
-
-		/* Add each rcvd pkt to buffer */
-		bool flow_pkt_rcvd = false;
-		uint8_t rfid;
-		uint8_t resp;
-		bool rcvd[MAX_FLOW_NUM] = {0};
-		for(uint8_t i = 0; i < n_rcvd; i++) {
-			pkt = rcvd_pkts[i];
-			resp = verify_pkt(pkt);
-			if(resp == 0) {
-				rte_pktmbuf_free(pkt);
-				continue;
-			} 
-			rfid = resp - 1;
-			if (rfid == STOP_FLOW_ID) break;
 			
-			flow_pkt_rcvd = true;
-			rcvd[rfid] = true;
-			seq = get_seq(pkt);
-			if (buf[rfid][(seq - 1) % BUF_SIZE] == NULL) {
-				buf[rfid][(seq - 1) % BUF_SIZE] = pkt;
-				n_buf_pkts[rfid]++;
+			while(true) {
+				n_rcvd = rte_eth_rx_burst(port, 0, rcvd_pkts, BURST_SIZE);
+
+				if (unlikely(n_rcvd == 0))
+					break;
+
+				/* Add each rcvd pkt to buffer */
+				uint8_t resp;
+				for(uint8_t i = 0; i < n_rcvd; i++) {
+					pkt = rcvd_pkts[i];
+					resp = verify_pkt(pkt);
+					if(resp == 0) {
+						rte_pktmbuf_free(pkt);
+						continue;
+					} 
+					rfid = resp - 1;
+					if (rfid == STOP_FLOW_ID) break;
+					
+					rcvd[rfid] = true;
+					seq = get_seq(pkt);
+					if (buf[rfid][(seq - 1) % BUF_SIZE] == NULL) {
+						buf[rfid][(seq - 1) % BUF_SIZE] = pkt;
+						n_buf_pkts[rfid]++;
+					}
+					if (seq > last_pkt_recvd[rfid])
+						last_pkt_recvd[rfid] = seq;
+				}
 			}
-			if (seq > last_pkt_recvd[rfid])
-				last_pkt_recvd[rfid] = seq;
 		}
+		if (n_rcvd == 0) continue;
 		if (rfid == STOP_FLOW_ID) break;
-		if (!flow_pkt_rcvd) continue;
 
 		int new_seqd_pkt[MAX_FLOW_NUM] = {0};
 		uint8_t n_snd = 0;
@@ -351,16 +349,18 @@ void lcore_main(void)
 			nxt_pkt_expcd[fid] += new_seqd_pkt[fid];
 
 			/* Construct an ack packet for (nxt_pkt_expcd - 1). */
-			ack = construct_ack(rcvd_pkts[0], nxt_pkt_expcd[fid] - 1, BUF_SIZE - n_buf_pkts[fid]);	
+			ack = construct_ack(rcvd_pkts[0], fid,
+				nxt_pkt_expcd[fid] - 1, BUF_SIZE - n_buf_pkts[fid]);	
 			
-			for (int i = 0; i < n_rcvd; i++) {	
-				rte_pktmbuf_free(rcvd_pkts[i]);
-			}
 			if(ack == NULL) continue;
 			/* Send back ack. */
 			snd_pkts[n_snd++] = ack;
 			debug("Will send flow %u, ack %lu\n", fid, nxt_pkt_expcd[fid] - 1);
 		}
+		for (int i = 0; i < n_rcvd; i++) {	
+			rte_pktmbuf_free(rcvd_pkts[i]);
+		}
+		
 		rte_eth_tx_burst(ETH_PORT_ID, 0, snd_pkts, n_snd);
 		for(uint16_t i = 0; i < n_snd; i++)
 			rte_pktmbuf_free(snd_pkts[i]);
@@ -386,7 +386,7 @@ void lcore_main(void)
 }
 
 /* Construct Ack packet for a received packet using input ack num and window size. */
-struct rte_mbuf * construct_ack(struct rte_mbuf *pkt, uint32_t ack_num, uint32_t wnd) {
+struct rte_mbuf * construct_ack(struct rte_mbuf *pkt, uint8_t fid, uint32_t ack_num, uint32_t wnd) {
 	struct rte_ether_hdr *eth_h;
 	struct rte_ipv4_hdr *ip_h;
 	struct rte_tcp_hdr *tcp_h;
@@ -439,8 +439,8 @@ struct rte_mbuf * construct_ack(struct rte_mbuf *pkt, uint32_t ack_num, uint32_t
 	
 	/* add in TCP hdr */
 	tcp_h_ack = (struct rte_tcp_hdr *)ptr;
-	tcp_h_ack->src_port = tcp_h->dst_port;
-	tcp_h_ack->dst_port = tcp_h->src_port;
+	tcp_h_ack->src_port = rte_cpu_to_be_16(5001 + fid);
+	tcp_h_ack->dst_port = rte_cpu_to_be_16(5001 + fid);
 	tcp_h_ack->sent_seq = 0;
 	tcp_h_ack->recv_ack = ack_num;
 	tcp_h_ack->data_off = 0;
