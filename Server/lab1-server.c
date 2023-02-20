@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <time.h>
 #include <rte_eal.h>
 #include <rte_ethdev.h>
 #include <rte_cycles.h>
@@ -353,6 +354,8 @@ void lcore_main(void)
 			if(same_ack[fid] >= 10) {
 				nxt_pkt_expcd[fid]++;
 				same_ack[fid] = 0;
+				if(nxt_pkt_expcd[fid] - 1 > last_pkt_recvd[fid]) 
+					last_pkt_recvd[fid] = nxt_pkt_expcd[fid] - 1;
 			}
 			
 			/* Construct an ack packet for (nxt_pkt_expcd - 1). */
@@ -387,6 +390,11 @@ void lcore_main(void)
             debug("%u, ", n_buf_pkts[fid]);
         }
 		debug("\n");
+
+		// struct timespec ts;
+        // ts.tv_sec = 0;
+        // ts.tv_nsec = 50 * 1000 * 1000;
+        // nanosleep(&ts, NULL);
 	}
 }
 

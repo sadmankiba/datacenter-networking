@@ -1,6 +1,6 @@
 
 make clean
-make DEBUG=1
+make
 
 while true; do
     make run
