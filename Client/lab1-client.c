@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include <math.h>
 #include <time.h>
+#include <unistd.h>
 #include <rte_eal.h>
 #include <rte_ethdev.h>
 #include <rte_cycles.h>
@@ -31,7 +32,6 @@
 #define STOP_FLOW_ID 100
 #define MAX_FLOW_NUM 8
 #define TIMEOUT_US 50
-#define SLEEP_US 10
 
 struct rte_mbuf * construct_pkt(size_t, uint32_t);
 size_t get_appl_data();
@@ -436,8 +436,12 @@ void lcore_main()
 
         struct timespec ts;
         ts.tv_sec = 0;
-        ts.tv_nsec = SLEEP_US * 1000;
+        ts.tv_nsec = 10 * 1000;
         nanosleep(&ts, NULL);
+        // sleep(2);
+        // if(last_pkt_acked > 0.25 * NUM_PING) printf("25% acked\n");
+        // else if (last_pkt_acked > 0.5 * NUM_PING) printf("50% acked");
+
     }
 
     /* latency in us */
@@ -472,7 +476,7 @@ struct rte_mbuf * construct_pkt(size_t fid, uint32_t sent_seq) {
     struct rte_tcp_hdr *tcp_hdr;
 
     /* Dst mac address */ 
-    struct rte_ether_addr dst = {{0x14, 0x58, 0xd0, 0x58, 0x9f, 0x52}};
+    struct rte_ether_addr dst = {{0x14, 0x58, 0xd0, 0x58, 0x9f, 0x53}};
 
     size_t header_size = 0;
 
@@ -500,8 +504,8 @@ struct rte_mbuf * construct_pkt(size_t fid, uint32_t sent_seq) {
     ipv4_hdr->fragment_offset = 0;
     ipv4_hdr->time_to_live = 64;
     ipv4_hdr->next_proto_id = IPPROTO_TCP;
-    ipv4_hdr->src_addr = rte_cpu_to_be_32("192.168.10.3");
-    ipv4_hdr->dst_addr = rte_cpu_to_be_32("192.168.10.2");
+    ipv4_hdr->src_addr = rte_cpu_to_be_32("127.0.0.1");
+    ipv4_hdr->dst_addr = rte_cpu_to_be_32("127.0.0.1");
 
     uint32_t ipv4_checksum = wrapsum(checksum((unsigned char *)ipv4_hdr, sizeof(struct rte_ipv4_hdr), 0));
     ipv4_hdr->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
@@ -588,6 +592,7 @@ int main(int argc, char *argv[])
         if (portid == 1 && port_init(portid, mbuf_pool) != 0)
             rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n",
                     portid);
+    sleep(5);
 	
 	if (rte_lcore_count() > 1)
 		printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");

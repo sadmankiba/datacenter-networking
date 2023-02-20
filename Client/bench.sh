@@ -30,7 +30,7 @@ if [ $1 == flow ]; then
     for fn in 1 2 3 4 5 6 7 8; do
         echo -n "$fn, " >> fn.csv 
         export FLOW_NUM=$fn 
-        export FLOW_SIZE=$((32 * 1024 * 1024))
+        export FLOW_SIZE=$((1024 * 1024))
         make run | tail -n 1 >> fn.csv 
         echo "" >> fn.csv 
         sleep 5
