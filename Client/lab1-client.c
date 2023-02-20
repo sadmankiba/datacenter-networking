@@ -337,7 +337,10 @@ void lcore_main()
             for (uint32_t i = last_pkt_acked[fid] + 1; 
                 i <= last_pkt_sent[fid] && i <= last_pkt_written[fid]; i++) {
                 if((raw_time_ns() - time_sent[fid][(i-1) % BUF_SIZE]) > (5 * 1000 * 1000)) { /* 5 ms */
-                    send_pkts[n_snd] = buf[fid][(i - 1) % BUF_SIZE];
+                    send_pkts[n_snd] = construct_pkt(fid, i);
+                    if(false) {
+                        send_pkts[n_snd] = buf[fid][(i - 1) % BUF_SIZE];
+                    }
                     retr[n_snd] = i;
                     n_snd++;        
                 }
@@ -348,60 +351,33 @@ void lcore_main()
             }
             for(uint16_t i = 0; i < n_snd; i++) {
                 time_sent[fid][(retr[i] - 1) % BUF_SIZE] = raw_time_ns();
+                rte_pktmbuf_free(send_pkts[i]);
             }
         }
 
         /* Populate buf to fill full */
-        debug_buf0(buf);
-        debug("Populating buf\n");
         for(uint8_t fid = 0; fid < flow_num; fid++) {
-            for (uint32_t i = 0; i < BUF_SIZE; i++) {
-                if (last_pkt_written[fid] >= NUM_PING) continue;
-
-                if(buf[fid][last_pkt_written[fid] % BUF_SIZE] == NULL) {
-                    buf[fid][last_pkt_written[fid] % BUF_SIZE] = \
-                        construct_pkt(fid, last_pkt_written[fid] + 1);
-                    last_pkt_written[fid]++;
-                    n_empty_buf[fid]--;
-                } else break;
-            }
-            /* Verifying buf */
-            for(uint32_t i = 0; i < BUF_SIZE; i++) {
-                pkt = buf[fid][(last_pkt_acked[fid] + i) % BUF_SIZE];
-                if(last_pkt_acked[fid] + i >= NUM_PING) break;
-
-                seq = get_seq(pkt);
-                if (seq != last_pkt_acked[fid] + i + 1) {
-                    if (seq == last_pkt_written[fid]) last_pkt_written[fid]--;
-
-                    rte_pktmbuf_free(buf[fid][(last_pkt_acked[fid] + i) % BUF_SIZE]);
-                    buf[fid][(last_pkt_acked[fid] + i) % BUF_SIZE] = \
-                        construct_pkt(fid, last_pkt_acked[fid] + i + 1);
-                    
-                }
-            }
+            last_pkt_written[fid] = NUM_PING < (last_pkt_acked[fid] + BUF_SIZE)? \
+                NUM_PING : last_pkt_acked[fid] + BUF_SIZE;
         }
-        debug_buf0(buf);
 
         /* Send data */
+        uint32_t prev_sent;
         for (uint8_t fid = 0; fid < flow_num; fid++) {
             n_snd = 0;
+            prev_sent = last_pkt_sent[fid];
             while(((last_pkt_sent[fid] - last_pkt_acked[fid]) < rcv_wnd[fid]) 
                 && (last_pkt_sent[fid] < last_pkt_written[fid])) {
-                    pkt = buf[fid][(last_pkt_sent[fid]) % BUF_SIZE];
-                    if (pkt != NULL) {
-                        seq = get_seq(pkt);
-                        if (seq > last_pkt_acked[fid]) {
-                            send_pkts[n_snd++] = pkt;
-                        }
-                        if (seq > last_pkt_sent[fid]) {
-                            last_pkt_sent[fid] = seq;
-                        }
-                    }
+                    pkt = construct_pkt(fid, last_pkt_sent[fid] + 1);
+                    send_pkts[n_snd++] = pkt;
+                    last_pkt_sent[fid]++;
             }
             if(n_snd > 0) {
                 rte_eth_tx_burst(1, 0, send_pkts, n_snd);
-                time_sent[fid][last_pkt_sent[fid] % BUF_SIZE] = raw_time_ns();
+                for (uint32_t i = prev_sent + 1; i <= last_pkt_sent[fid]; i++)
+                    time_sent[fid][(i - 1) % BUF_SIZE] = raw_time_ns();
+                for(uint32_t i = 0; i < n_snd; i++)
+                    rte_pktmbuf_free(send_pkts[i]);
                 debug("Sent flow %u, n_snd %u, last pkt seq %u\n", fid, n_snd, last_pkt_sent[fid]);
             }
         }
@@ -452,7 +428,6 @@ void lcore_main()
             debug("%u, ", rcv_wnd[fid]);
         }
         debug("\n");
-        debug_buf0(buf);
 
         struct timespec ts;
         ts.tv_sec = 0;
