@@ -165,7 +165,6 @@ static int parse_packet(uint64_t *recv_ack, uint32_t *rcv_wnd, struct rte_mbuf *
     
     *recv_ack = tcp_hdr->recv_ack;
     *rcv_wnd = tcp_hdr->rx_win;
-    debug("Parsed pkt flow %u, ack %lu\n", ret - 1, *recv_ack);
     return ret;
 }
 
@@ -257,11 +256,11 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 	return 0;
 }
 
-void debug_buf0(struct rte_mbuf *buf[][BUF_SIZE]) {
-	debug("buffer: ");
+void debug_sendpkt(struct rte_mbuf *buf[], uint32_t n) {
+	debug("sendpkt: ");
 	
-	for (uint32_t i = 0; i < BUF_SIZE; i++) {
-		debug("%u, ", get_seq(buf[0][i]));
+	for (uint32_t i = 0; i < n; i++) {
+		debug("%u, ", get_seq(buf[i]));
 	}
 	debug("\n");
 }
@@ -346,6 +345,7 @@ void lcore_main()
                 }
             }
             if (n_snd > 0) {
+                debug_sendpkt(send_pkts, n_snd);
                 rte_eth_tx_burst(1, 0, send_pkts, n_snd);
                 debug("retransmitted fid %u, n_snd %u\n", fid, n_snd);
             }
@@ -373,6 +373,7 @@ void lcore_main()
                     last_pkt_sent[fid]++;
             }
             if(n_snd > 0) {
+                debug_sendpkt(send_pkts, n_snd);
                 rte_eth_tx_burst(1, 0, send_pkts, n_snd);
                 for (uint32_t i = prev_sent + 1; i <= last_pkt_sent[fid]; i++)
                     time_sent[fid][(i - 1) % BUF_SIZE] = raw_time_ns();
