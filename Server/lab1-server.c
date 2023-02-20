@@ -238,11 +238,11 @@ uint8_t verify_pkt(struct rte_mbuf *pkt)
 	return ret;
 }
 
-void debug_buf0(struct rte_mbuf *buf[][BUF_SIZE]) {
-	debug("buffer: ");
+void debug_buf0(uint32_t buf[][BUF_SIZE]) {
+	debug("seqbuf: ");
 	
 	for (uint16_t i = 0; i < BUF_SIZE; i++) {
-		debug("%u, ", get_seq(buf[0][i]));
+		debug("%u, ", buf[0][i]);
 	}
 	debug("\n");
 }
@@ -284,7 +284,8 @@ void lcore_main(void)
 	uint32_t seq;
 	uint8_t pkts_to_cnsm[MAX_FLOW_NUM];
 	struct rte_mbuf *snd_pkts[MAX_FLOW_NUM];
-	uint32_t prev_read;
+	uint32_t last_npe;
+	uint8_t same_ack[MAX_FLOW_NUM] = {0};
 
 	for (uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
 		nxt_pkt_expcd[fid] = 1;
@@ -339,14 +340,20 @@ void lcore_main(void)
 		if (n_rcvd == 0) continue;
 		if (rfid == STOP_FLOW_ID) break;
 
-		uint32_t new_seqd_pkt[MAX_FLOW_NUM] = {0};
+		debug_buf0(seqbuf);
 		uint8_t n_snd = 0;
 		for (uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
 			if(rcvd[fid] == false) continue;
 			
 			/* Find the highest seq packet rcvd */
+			last_npe = nxt_pkt_expcd[fid];
 			while(seqbuf[fid][(nxt_pkt_expcd[fid] - 1) % BUF_SIZE] == nxt_pkt_expcd[fid])
 				nxt_pkt_expcd[fid]++;
+			if(nxt_pkt_expcd[fid] == last_npe) same_ack[fid]++;
+			if(same_ack[fid] >= 10) {
+				nxt_pkt_expcd[fid]++;
+				same_ack[fid] = 0;
+			}
 			
 			/* Construct an ack packet for (nxt_pkt_expcd - 1). */
 			ack = construct_ack(rcvd_pkts[0], fid,
