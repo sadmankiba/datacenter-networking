@@ -43,7 +43,7 @@ static struct rte_ether_addr my_eth;
 uint16_t eth_port_id = 1;
 
 int flow_size;
-int payload_len = 64;
+int payload_len = 1024;
 int flow_num;
 
 
@@ -410,6 +410,8 @@ void lcore_main()
                         lat_cum_us[rfid] += (uint64_t) (lat_ns 
                             * (recv_ack[rfid] - last_pkt_acked[rfid]) * 1.0 / 1000);
                         last_pkt_acked[rfid] = recv_ack[rfid];
+                        if(last_pkt_acked[rfid] > last_pkt_sent[rfid])
+                            last_pkt_sent[rfid] = last_pkt_acked[rfid];
                     }
                 }
                 rte_pktmbuf_free(pkts_rcvd[i]);
@@ -430,10 +432,6 @@ void lcore_main()
         }
         debug("\n");
 
-        struct timespec ts;
-        ts.tv_sec = 0;
-        ts.tv_nsec = 50 * 1000 * 1000;
-        nanosleep(&ts, NULL);
         // sleep(2);
     }
 
