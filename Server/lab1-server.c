@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <time.h>
+#include <unistd.h>
 #include <rte_eal.h>
 #include <rte_ethdev.h>
 #include <rte_cycles.h>
@@ -27,7 +28,6 @@
 #define N_PKT_READ 1024
 #define STOP_FLOW_ID 100
 #define MAX_FLOW_NUM 8
-#define SLEEP_US 50
 
 
 struct rte_mbuf * construct_ack(struct rte_mbuf *, uint8_t, uint32_t, uint32_t);
@@ -394,8 +394,9 @@ void lcore_main(void)
 
 		struct timespec ts;
         ts.tv_sec = 0;
-        ts.tv_nsec = SLEEP_US * 1000;
+        ts.tv_nsec = 10 * 1000;
         nanosleep(&ts, NULL);
+		// sleep(2);
 	}
 }
 
@@ -524,6 +525,7 @@ int main(int argc, char *argv[])
 			rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n",
 					portid);
 	}
+	sleep(5);
 
 	if (rte_lcore_count() > 1)
 		printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
