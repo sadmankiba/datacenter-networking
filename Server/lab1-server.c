@@ -280,6 +280,7 @@ void lcore_main(void)
 	uint32_t last_pkt_recvd[MAX_FLOW_NUM] = {0};
 	uint32_t n_buf_pkts[MAX_FLOW_NUM] = {0};
 	struct rte_mbuf *buf[MAX_FLOW_NUM][BUF_SIZE];
+	uint32_t seqbuf[MAX_FLOW_NUM][BUF_SIZE];
 	uint32_t seq;
 	uint8_t pkts_to_cnsm[MAX_FLOW_NUM];
 	struct rte_mbuf *snd_pkts[MAX_FLOW_NUM];
@@ -289,6 +290,7 @@ void lcore_main(void)
 		nxt_pkt_expcd[fid] = 1;
 		for(uint16_t i = 0; i < BUF_SIZE; i++) {
 			buf[fid][i] = NULL;
+			seqbuf[fid][i] = 0;
 		}
 	}
 	
@@ -299,20 +301,7 @@ void lcore_main(void)
 	for (;;) {
 		/* Read buf */
 		for(uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
-			prev_read = last_pkt_read[fid];
-			for(uint32_t i = 0; i < BUF_SIZE; i++) {
-				pkt = buf[fid][(prev_read + i) % BUF_SIZE];
-				if (pkt == NULL) continue;
-
-				seq = get_seq(pkt);
-				if (seq == last_pkt_read[fid] + 1)
-					last_pkt_read[fid]++;
-				if (seq <= last_pkt_read[fid] + 1) {
-					rte_pktmbuf_free(pkt);
-					n_buf_pkts[fid]--;
-					buf[fid][(prev_read + i) % BUF_SIZE] = NULL;
-				}
-			}
+			last_pkt_read[fid] = nxt_pkt_expcd[fid] - 1;
 		}
 		
 		bool rcvd[MAX_FLOW_NUM] = {0};
@@ -326,68 +315,50 @@ void lcore_main(void)
 			if (unlikely(n_rcvd == 0))
 				continue;
 
-			/* Add each rcvd pkt to buffer */
+			/* Add each rcvd pkt seq to buffer */
 			uint8_t resp;
 			for(uint32_t i = 0; i < n_rcvd; i++) {
 				pkt = rcvd_pkts[i];
 				resp = verify_pkt(pkt);
-				if(resp == 0) {
-					rte_pktmbuf_free(pkt);
-					continue;
-				} 
+				if(resp == 0) continue;
+
 				rfid = resp - 1;
 				if (rfid == STOP_FLOW_ID) break;
 				
 				rcvd[rfid] = true;
 				seq = get_seq(pkt);
 				if (seq >= nxt_pkt_expcd[rfid]) {
-					if(buf[rfid][(seq - 1) % BUF_SIZE] != NULL) {
-						rte_pktmbuf_free(buf[rfid][(seq - 1) % BUF_SIZE]);
-					} else {
-						n_buf_pkts[rfid]++;
-					}
-					buf[rfid][(seq - 1) % BUF_SIZE] = pkt;
-				} else {
-					rte_pktmbuf_free(pkt);
-				}
+					seqbuf[rfid][(seq - 1) % BUF_SIZE] = seq;
+				} 
 				if (seq > last_pkt_recvd[rfid])
 					last_pkt_recvd[rfid] = seq;
-			
+
+				rte_pktmbuf_free(rcvd_pkts[i]);
 			}
 		}
 		if (n_rcvd == 0) continue;
 		if (rfid == STOP_FLOW_ID) break;
 
-		int new_seqd_pkt[MAX_FLOW_NUM] = {0};
+		uint32_t new_seqd_pkt[MAX_FLOW_NUM] = {0};
 		uint8_t n_snd = 0;
 		for (uint8_t fid = 0; fid < MAX_FLOW_NUM; fid++) {
 			if(rcvd[fid] == false) continue;
 			
 			/* Find the highest seq packet rcvd */
-			while(true) {
-				pkt = buf[fid][(nxt_pkt_expcd[fid] - 1 + new_seqd_pkt[fid]) % BUF_SIZE];
-				if (pkt != NULL && get_seq(pkt) == (nxt_pkt_expcd[fid] + new_seqd_pkt[fid])
-					&& new_seqd_pkt[fid] < BUF_SIZE) 
-					new_seqd_pkt[fid]++;
-				else break;
-			}
+			while(seqbuf[fid][(nxt_pkt_expcd[fid] - 1) % BUF_SIZE] == nxt_pkt_expcd[fid])
+				nxt_pkt_expcd[fid]++;
 			
-			nxt_pkt_expcd[fid] += new_seqd_pkt[fid];
-
 			/* Construct an ack packet for (nxt_pkt_expcd - 1). */
 			ack = construct_ack(rcvd_pkts[0], fid,
-				nxt_pkt_expcd[fid] - 1, BUF_SIZE - n_buf_pkts[fid]);	
+				nxt_pkt_expcd[fid] - 1, BUF_SIZE - (last_pkt_recvd - last_pkt_read));	
 			
 			if(ack == NULL) continue;
-			/* Send back ack. */
+			
 			snd_pkts[n_snd++] = ack;
 			debug("Will send flow %u, ack %u\n", fid, nxt_pkt_expcd[fid] - 1);
 		}
 		
-		// for (uint32_t i = 0; i < n_rcvd; i++) {	
-		// 	rte_pktmbuf_free(rcvd_pkts[i]);
-		// }
-		
+		/* Send back ack. */
 		rte_eth_tx_burst(ETH_PORT_ID, 0, snd_pkts, n_snd);
 		for(uint16_t i = 0; i < n_snd; i++)
 			rte_pktmbuf_free(snd_pkts[i]);
@@ -409,7 +380,6 @@ void lcore_main(void)
             debug("%u, ", n_buf_pkts[fid]);
         }
 		debug("\n");
-		debug_buf0(buf);
 	}
 }
 
