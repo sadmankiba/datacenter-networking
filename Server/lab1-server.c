@@ -27,6 +27,7 @@
 #define N_PKT_READ 1024
 #define STOP_FLOW_ID 100
 #define MAX_FLOW_NUM 8
+#define SLEEP_US 50
 
 
 struct rte_mbuf * construct_ack(struct rte_mbuf *, uint8_t, uint32_t, uint32_t);
@@ -391,10 +392,10 @@ void lcore_main(void)
         }
 		debug("\n");
 
-		// struct timespec ts;
-        // ts.tv_sec = 0;
-        // ts.tv_nsec = 50 * 1000 * 1000;
-        // nanosleep(&ts, NULL);
+		struct timespec ts;
+        ts.tv_sec = 0;
+        ts.tv_nsec = SLEEP_US * 1000;
+        nanosleep(&ts, NULL);
 	}
 }
 
