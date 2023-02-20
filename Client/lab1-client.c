@@ -30,6 +30,8 @@
 #define RX_BURST_SIZE 256
 #define STOP_FLOW_ID 100
 #define MAX_FLOW_NUM 8
+#define TIMEOUT_US 50
+#define SLEEP_US 10
 
 struct rte_mbuf * construct_pkt(size_t, uint32_t);
 size_t get_appl_data();
@@ -43,7 +45,7 @@ static struct rte_ether_addr my_eth;
 uint16_t eth_port_id = 1;
 
 int flow_size;
-int payload_len = 1024;
+int payload_len = 64;
 int flow_num;
 
 
@@ -335,7 +337,7 @@ void lcore_main()
             n_snd = 0;
             for (uint32_t i = last_pkt_acked[fid] + 1; 
                 i <= last_pkt_sent[fid] && i <= last_pkt_written[fid]; i++) {
-                if((raw_time_ns() - time_sent[fid][(i-1) % BUF_SIZE]) > (5 * 1000 * 1000)) { /* 5 ms */
+                if((raw_time_ns() - time_sent[fid][(i-1) % BUF_SIZE]) > (TIMEOUT_US * 1000)) { 
                     send_pkts[n_snd] = construct_pkt(fid, i);
                     if(false) {
                         send_pkts[n_snd] = buf[fid][(i - 1) % BUF_SIZE];
@@ -432,7 +434,10 @@ void lcore_main()
         }
         debug("\n");
 
-        // sleep(2);
+        struct timespec ts;
+        ts.tv_sec = 0;
+        ts.tv_nsec = SLEEP_US * 1000;
+        nanosleep(&ts, NULL);
     }
 
     /* latency in us */
@@ -467,7 +472,7 @@ struct rte_mbuf * construct_pkt(size_t fid, uint32_t sent_seq) {
     struct rte_tcp_hdr *tcp_hdr;
 
     /* Dst mac address */ 
-    struct rte_ether_addr dst = {{0x14, 0x58, 0xd0, 0x58, 0x9f, 0x53}};
+    struct rte_ether_addr dst = {{0x14, 0x58, 0xd0, 0x58, 0x9f, 0x52}};
 
     size_t header_size = 0;
 
@@ -495,8 +500,8 @@ struct rte_mbuf * construct_pkt(size_t fid, uint32_t sent_seq) {
     ipv4_hdr->fragment_offset = 0;
     ipv4_hdr->time_to_live = 64;
     ipv4_hdr->next_proto_id = IPPROTO_TCP;
-    ipv4_hdr->src_addr = rte_cpu_to_be_32("127.0.0.1");
-    ipv4_hdr->dst_addr = rte_cpu_to_be_32("127.0.0.1");
+    ipv4_hdr->src_addr = rte_cpu_to_be_32("192.168.10.3");
+    ipv4_hdr->dst_addr = rte_cpu_to_be_32("192.168.10.2");
 
     uint32_t ipv4_checksum = wrapsum(checksum((unsigned char *)ipv4_hdr, sizeof(struct rte_ipv4_hdr), 0));
     ipv4_hdr->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
