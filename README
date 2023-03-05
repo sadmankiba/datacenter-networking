@@ -1,0 +1,13 @@
+Name: Sadman Sakib
+CS Username: sadmankiba
+
+Run-
+Server 
+cd Server 
+make
+cd build && ./lab1-server
+
+Client
+cd Client
+make
+cd build && ./lab1-client 1 1024
