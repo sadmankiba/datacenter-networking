@@ -29,6 +29,9 @@ Logfile::Logfile(const string &filename,
         cerr << "Failed to open logfile " << idFile << endl;
         exit(1);
     }
+    
+    string txtFile = filename + ".txt";
+    _txt_file = fopen(txtFile.c_str(), "w");
 
     _records = (struct Record *) malloc(MAX_RECORDS * sizeof(struct Record));
 }
@@ -47,6 +50,8 @@ Logfile::~Logfile()
     if (_id_file != NULL) {
         fclose(_id_file);
     }
+
+    fclose(_txt_file);
 }
 
 void
@@ -93,6 +98,8 @@ Logfile::writeRecord(uint32_t type,
 
     _nRecords++;
     _nTotalRecords++;
+    
+    fprintf(_txt_file, "%f: %d: %d: %d: %f, %f, %f\n", _records[i].time, type, id, ev, val1, val2, val3);
 
     // Flush to file if buffer full.
     if (_nRecords == MAX_RECORDS) {

@@ -4,6 +4,8 @@
 #ifndef TESTS_H
 #define TESTS_H
 
+#include "logfile.h"
+
 #include <string>
 #include <unordered_map>
 

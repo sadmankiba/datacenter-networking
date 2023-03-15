@@ -54,6 +54,7 @@ class Logfile
     private:
         FILE *_trace_file;
         FILE *_id_file;
+        FILE *_txt_file;
 
         simtime_picosec _start;
         simtime_picosec _end;
