@@ -7,6 +7,7 @@
 #include "eventlist.h"
 
 #include <string>
+#include <unordered_map>
 
 /*
  * Logfile is a class for specifying the log file format.
@@ -62,6 +63,9 @@ class Logfile
         struct Record *_records;
         uint32_t _nRecords;
         uint32_t _nTotalRecords;
+        std::unordered_map<unsigned int, std::string> _evTypeMap = {{0, "QUEUE_EVENT"}, {1, "TCP_EVENT"}, {2, "TCP_STATE"}, {3, "TRAFFIC_EVENT"}, 
+            {4, "QUEUE_RECORD"}, {5, "QUEUE_APPROX"}, {6, "TCP_RECORD"}, {11, "TCP_SINK"}};
+        std::unordered_map<uint32_t, std::string> _idNameMap;
 };
 
 #endif /* LOGFILE_H */

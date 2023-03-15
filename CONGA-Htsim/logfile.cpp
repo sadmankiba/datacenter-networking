@@ -71,6 +71,7 @@ Logfile::writeName(Logged &logged)
 {
     string buffer = logged.str() + "=" + to_string(logged.id) + "\n";
     fputs(buffer.c_str(), _id_file);
+    _idNameMap[logged.id] = logged.str();
 }
 
 void
@@ -99,7 +100,7 @@ Logfile::writeRecord(uint32_t type,
     _nRecords++;
     _nTotalRecords++;
     
-    fprintf(_txt_file, "%f: %d: %d: %d: %f, %f, %f\n", _records[i].time, type, id, ev, val1, val2, val3);
+    fprintf(_txt_file, "%f: %s: %s: %d: %f, %f, %f\n", _records[i].time, _evTypeMap[type].c_str(), _idNameMap[id].c_str(), ev, val1, val2, val3);
 
     // Flush to file if buffer full.
     if (_nRecords == MAX_RECORDS) {
