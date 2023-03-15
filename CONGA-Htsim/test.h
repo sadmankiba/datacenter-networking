@@ -17,6 +17,9 @@ void single_link_simulation(const ArgList &, Logfile &);
 void conga_testbed(const ArgList &, Logfile &);
 void fat_tree_testbed(const ArgList &, Logfile &);
 
+/*
+ * Setup testbed
+ */
 inline int 
 run_experiment(uint32_t expt,
                const ArgList &args,

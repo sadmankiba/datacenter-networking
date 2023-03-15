@@ -9,6 +9,9 @@
 #include "pipe.h"
 #include "test.h"
 
+route_t rfwd, rbck;
+void routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst);
+
 namespace conga {
 
     // tesdbed configuration
@@ -29,8 +32,44 @@ namespace conga {
 using namespace std;
 using namespace conga;
 
+
+
 void
 conga_testbed(const ArgList &args, Logfile &logfile)
 {
-    // testbed definition
+    Pipe *pipefwd = new Pipe(timeFromUs(10));
+    pipefwd->setName("pipefwd");
+    Pipe *pipebck = new Pipe(timeFromUs(8));
+    pipebck->setName("pipebck");
+
+    logfile.writeName(*pipefwd);
+    logfile.writeName(*pipebck);
+
+    Queue *qfwd = new FairQueue(1000, 40, nullptr);
+    qfwd->setName("qfwd");
+    Queue *qbck = new FairQueue(2400, 30, nullptr);
+    qbck->setName("qbck");
+
+    logfile.writeName(*qfwd);
+    logfile.writeName(*qbck);
+
+    rfwd.push_back(qfwd);
+    rfwd.push_back(pipefwd);
+    rbck.push_back(qbck);
+    rbck.push_back(pipebck);
+    
+    DataSource::EndHost eh = DataSource::TCP;
+    Workloads::FlowDist fd = Workloads::UNIFORM;
+
+    FlowGenerator *fg = new FlowGenerator(eh, routeGenerate, 200, 60, fd); 
+
+    fg->setEndhostQueue(500, 25);
+    fg->setTimeLimits(0, timeFromUs(200) - 1);
+
+    EventList::Get().setEndtime(timeFromUs(200));
+}
+
+void routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {
+    fwd = new route_t(rfwd); rev = new route_t(rbck); 
+    src = 0; dst = 1;
 }
