@@ -14,6 +14,9 @@ DataSink::connect(DataSource &src, route_t &route)
     _route = &route;
 }
 
+/* Checks seq num of received packet. Updates nextByteExpected and packet buffer accordingly.
+ * Does not return ack packet.
+ */
 void 
 DataSink::processDataPacket(DataPacket &pkt)
 {

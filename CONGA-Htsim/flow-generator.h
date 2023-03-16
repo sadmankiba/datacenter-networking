@@ -17,7 +17,13 @@
 #include <deque>
 #include <functional>
 
-/* Route generator function. */
+/* 
+ * Back and forth route generator function for a flow
+ * params
+ * - route fwd: List of PacketSinks in forward direction.
+ * - route rev: List of PacketSinks in reverse direction.
+ * - src:  
+ */
 typedef std::function<void(route_t *&, route_t *&, uint32_t &, uint32_t &)> route_gen_t;
 
 class FlowGenerator : public EventSource
@@ -55,7 +61,7 @@ class FlowGenerator : public EventSource
         uint64_t generateFlowSize();
 
         std::string _prefix;          // Optional prefix for flows.
-        DataSource::EndHost _endhost; // Type of endhost.
+        DataSource::EndHost _ehproto; // Type of endhost protocol.
         route_gen_t _routeGen;        // Function to generate a route.
         linkspeed_bps _flowRate;      // Target flow rate in bytes/sec.
         uint32_t _flowSizeDist;       // Distribution of flow size [0/1/2] - Uniform/Exp/Pareto.

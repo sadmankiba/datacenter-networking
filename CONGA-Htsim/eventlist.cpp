@@ -25,6 +25,7 @@ EventList::setEndtime(simtime_picosec endtime)
     _endtime = endtime;
 }
 
+
 bool
 EventList::doNextEvent() 
 {

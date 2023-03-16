@@ -14,6 +14,7 @@
 #include "prof.h"
 
 namespace fat_tree {
+    // Core -- Agg -- ToR -- Server
     const int N_SUBTREE = 4;  // In full network
     const int N_TOR = 2;      // Per SubTree
     const int N_AGG = 2;      // Per SubTree

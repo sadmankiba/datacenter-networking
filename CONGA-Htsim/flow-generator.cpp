@@ -5,14 +5,14 @@
 
 using namespace std;
 
-FlowGenerator::FlowGenerator(DataSource::EndHost endhost, 
+FlowGenerator::FlowGenerator(DataSource::EndHost ehproto, 
                              route_gen_t rg,
                              linkspeed_bps flowRate, 
                              uint32_t avgFlowSize, 
                              Workloads::FlowDist flowSizeDist)
     : EventSource("FlowGen"),
     _prefix(""),
-    _endhost(endhost),
+    _ehproto(ehproto),
     _routeGen(rg),
     _flowRate(flowRate),
     _flowSizeDist(flowSizeDist),
@@ -136,6 +136,15 @@ FlowGenerator::doNextEvent()
     }
 }
 
+/*
+ * Creates a flow by initializing a DataSource and a DataSink object.
+ * Sets route to DataSource object.
+ * Calls DataSource.connect()
+ * 
+ * @param:
+ * - flowSize: Flow size in bytes
+ * - startTime: Flow start time relative to current time
+ */
 void
 FlowGenerator::createFlow(uint64_t flowSize, 
                           simtime_picosec startTime)
@@ -158,7 +167,7 @@ FlowGenerator::createFlow(uint64_t flowSize,
     DataSource *src;
     DataSink *snk;
 
-    switch (_endhost) {
+    switch (_ehproto) {
         case DataSource::PKTPAIR:
             src = new PacketPairSrc(NULL, flowSize);
             snk = new PacketPairSink();
@@ -174,11 +183,11 @@ FlowGenerator::createFlow(uint64_t flowSize,
                      src = new TcpSrc(NULL, NULL, flowSize);
                      snk = new TcpSink();
 
-                     if (_endhost == DataSource::DCTCP || _endhost == DataSource::D_DCTCP) {
+                     if (_ehproto == DataSource::DCTCP || _ehproto == DataSource::D_DCTCP) {
                          TcpSrc::_enable_dctcp = true;
                      }
 
-                     if (_endhost == DataSource::D_TCP || _endhost == DataSource::D_DCTCP) {
+                     if (_ehproto == DataSource::D_TCP || _ehproto == DataSource::D_DCTCP) {
                          src->_enable_deadline = true;
                      }
                  }

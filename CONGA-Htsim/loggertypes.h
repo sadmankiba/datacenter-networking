@@ -10,6 +10,7 @@ class Packet;
 class TcpSrc;
 class Queue;
 
+/* A class that Logs */
 class Logged
 {
 public:

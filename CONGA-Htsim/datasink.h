@@ -10,7 +10,12 @@
 #include <list>
 
 class DataSource;
-
+/*
+ * A bare minimum TCP sink. 
+ * Tracks ordered received seq num. Also, tracks out-of-order received packets in an infinite buffer.
+ * Does not drop packet and reply ACK packets. 
+ * Does not generate any log.
+ */
 class DataSink : public PacketSink, public Logged
 {
     public:

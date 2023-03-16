@@ -19,6 +19,9 @@ class EventSource : public Logged
         virtual void doNextEvent() = 0;
 };
 
+/*
+ * 
+ */
 class EventList
 {
     public:
@@ -28,10 +31,16 @@ class EventList
         // End simulation at endtime (rather than forever)
         void setEndtime(simtime_picosec endtime);
 
-        // Returns true if it did anything, false if there's nothing to do.
+        /*
+         * Get next pending event source and processes its event.
+         * Returns true if it did anything, false if there's nothing to do.
+         */
         bool doNextEvent();
 
-        // Enqueue future events into the simulator.
+        /* 
+         * Register a event source at a future time.
+         * Enqueue future events into the simulator.
+         */
         void sourceIsPending(EventSource &src, simtime_picosec when);
         void sourceIsPendingRel(EventSource &src, simtime_picosec timefromnow)
         {

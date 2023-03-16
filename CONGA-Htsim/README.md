@@ -5,3 +5,15 @@ Run<br>
 make
 ./htsim --expt=1
 ```
+
+Added features to implement CONGA in Htsim-
+- Measure congestion at intermediate switches (PacketSinks) for each egress port.
+- Add tunnel header fields in packet.
+- Use a congestion matrix to calculate nexthop/path from a switch. Delay/update route for a packet.
+- Return congestion feedback from destination ToR to source ToR.
+
+Htsim modifications
+- Log records in txt format
+
+Notes-
+- Node in Htsim means endhost.
