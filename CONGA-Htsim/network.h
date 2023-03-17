@@ -58,7 +58,7 @@ class Packet
     mem_b _size;
     packetid_t _id;
 
-    uint32_t _nexthop;
+    uint32_t _nexthop; // nexthop index in _route
 
     uint32_t _flags;
     uint32_t _priority;
@@ -72,7 +72,7 @@ class PacketFlow : public Logged
     virtual ~PacketFlow() {};
     void logTraffic(Packet &pkt, Logged &location, TrafficLogger::TrafficEvent ev);
 
-    // How many packets of this flow are alive.
+    // How many packets of this flow are alive (on travel).
     uint32_t _nPackets;
 
     protected:
