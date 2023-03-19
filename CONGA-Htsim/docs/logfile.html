@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding='UTF-8'?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<head>
+<title>htsim logfile</title>
+<link rel=stylesheet type="text/css" href="htsim.css" title="Main">
+</head>
+<body>
+<div class="nav">
+<a href="index.html"><code>htsim</code></a> 
+&gt;&gt; 
+<a href="docs.html">documentation</a>
+&gt;&gt; 
+<a href="logging.html">using logging</a>
+&gt;&gt;
+logfile
+</div>
+
+<h1>Logfile</h1>
+
+The <code>Logfile</code> controls the how the simulation log is written to a file. This page explains
+<ul>
+<li>how loggers can write records to a logfile, in case you implement a new logger</li>
+<li>the format of the logfile, in case you want to read it into some other program</li>
+</ul>
+See <a href="logging.html#preparing">using logging</a> for how to set up the logfile
+(e.g. give user-friendly names to the simulation objects). See <a href="analyselogs.html">analysing logs</a> for
+R routines to read logs.
+
+<h2>Writing records to a logfile</h2>
+
+<pre class="code">
+writeRecord(uint32_t type, uint32_t id, uint32_t ev, double val1, double val2, double val3);
+</pre>
+
+<h2>Logfile format</h2>
+
+The log file consts of two parts: a plain-text preamble, and a binary trace.
+
+<h3>Preamble</h3>
+
+The preamble consists of lines of plain text, separated by <code>\n</code>, in any order (except for the # TRACE line). 
+The lines may be one of
+<table>
+<tr>
+<th>object definition</th><td>: <code>objname</code>=objid</td><td>associates a plain-text name <code>objname</code>
+with a numerical object id, as used in the <a href="traceformat.html">trace</a>
+</td>
+</tr>
+<tr>
+<th>comment line</th><td># arbitrary text string</td><td>typically used to describe the simulation setup</td>
+</tr>
+<tr>
+<th>special comment line</th><td># numrecords=nnn</td><td>specifies the number of records in the trace that follows</td>
+</th>
+</tr>
+<tr>
+<th>special comment line</th><td># TRACE</td><td>after the <code>\n</code>, the binary part of the log file begins. This must be the last line of the preamble.</td>
+</tr>
+</table>
+
+<a name="record"><h3>Trace</h3></a>
+
+The trace consists of <code>numrecords</code> records, consisting of the fields
+<table>
+<tr>
+<th>name</th><th>type</th><th>meaning</th>
+</tr>
+<tr>
+<td><code>time</code></td><td><code>double</code></td><td>timestamp [sec]</td>
+</tr>
+<tr>
+<td><code>eventtype</code></td><td><code>unsigned 32-bit int</code></td><td>class of event</td>
+</tr>
+<tr>
+<td><code>objid</code></td><td><code>unsigned 32-bit int</code></td><td>object id that the event refers to</td>
+</tr>
+<tr>
+<td><code>eventidX</code></td><td><code>unsigned 32-bit int</code></td><td>specific event</td>
+</tr>
+<tr>
+<td><code>val1</code></td><td><code>double</code></td><td rowspan="3">event-specific log values</td>
+</tr>
+<tr>
+<td><code>val2</code></td><td><code>double</code></td>
+</tr>
+<tr>
+<td><code>val3</code></td><td><code>double</code></td>
+</tr>
+</table>
+However, for convenience in reading in these fields, they are laid out transposed, i.e. <code>double[numrecords]</code> followed by  
+<code>unsigned 32-bit int[numrecords]</code> etc.
+
+The meanings of these fields are given by <a href="loggers.html">logger implementations</a>, <em>except</em> that
+<code>eventidX</code> is <code>100*eventtype+eventid</code>
+
+<div class="footer">
+<code>D.Wischik</code><em>at</em><code>cs.ucl.ac.uk</code>
+</div>
+</body>
+
+</html>

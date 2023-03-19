@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding='UTF-8'?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<head>
+<title>htsim multipath TCP implementation</title>
+<link rel=stylesheet type="text/css" href="htsim.css" title="Main">
+</head>
+<body>
+<div class="nav">
+<a href="index.html"><code>htsim</code></a> 
+&gt;&gt; 
+<a href="docs.html">documentation</a>
+&gt;&gt; 
+multipath TCP
+</div>
+
+<h1>Multipath TCP in htsim</h1>
+<h2>Implementation</h2>
+
+<p>
+The implementation of multipath TCP in htsim is mainly for congestion control testing.
+Thus, the code does not reorder data at connection level, or simulate receive buffer
+issues (such as blocking). 
+</p>
+
+<p>There are several congestion control algorithms implemented, including fully coupled, linked increases
+and uncoupled tcp. All the cwnd operations are done using integer arithmetic to mimic a real stack.
+</p>
+
+<p>Multipath is merely a congestion control wrapper around the traditional TCP code. The TCP code will
+perform traditional new reno CC by default; however, if it is added to a multipath connection, cc 
+will be handled by the connection. </p>
+
+<p>Currently, the code only supports two subflows. We haven't tested its behavior for more than two
+subflows.</p>
+
+<h2>Running tests</h2>
+<p>
+To start a multipath flow, just create a multipath tcp source with the desired congestion control 
+behavior, and add TCP flows to it. All the added TCP flows will be congestion controlled by the multipath
+connection, but are otherwise independent (e.g. retransmissions, sequence numbers, etc). 
+</p>
+
+<p>You can use one of the main_* files to test multipath. There are three simple topologies:
+the multipath dumbbell (one multipath connection with two subflows, each crossing a link shared with 
+other TCPs), shared botleneck (the multipath subflows cross the same bottleneck and compete with TCP),
+and resource pooling (only multipath flows). The congestion control algorithm is a command line 
+parameters to htsim; by default UNCOUPLED congestion control is used (e.g. independent TCP). The values
+for the other algos are FULLY_COUPLED and COUPLED_INC (this is the Linked Increases algorithm).
+A version of TCP with bottleneck fairness is implemented as COUPLED_TCP. </p>
+
+<p>By default, the main_* code will report once per second the rates each tcp (including multipath) sink gets. 
+To view the mean rates, just load analysis.r and call the rates() function. To draw the rates, call draw_rates(). 
+The loss rates of the queues are is displayed by approx_loss_rates(). There are other utility functions 
+defined in analysis.r for multipath. Some of them require detailed tcp logging (the examples also contains 
+this, typically for the multipath subflow).
+</p>
+
+<div class="footer">
+<code>C.Raiciu</code><em>at</em><code>cs.ucl.ac.uk</code>
+</div>
+</body>
+
+</html>

@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding='UTF-8'?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<head>
+<title>htsim loggers</title>
+<link rel=stylesheet type="text/css" href="htsim.css" title="Main">
+</head>
+<body>
+<div class="nav">
+<a href="index.html"><code>htsim</code></a> 
+&gt;&gt; 
+<a href="docs.html">documentation</a>
+&gt;&gt; 
+<a href="logging.html">using logging</a>
+&gt;&gt;
+logger implementations
+</div>
+
+<h1>Logger implementations</h1>
+
+<code>htsim</code> has some predefined classes for certain types of logging.
+They all produce records in the general format specified in <a href="logfile.html#record">logfile</a>.
+The meanings of the record fields, for the specific types of event-records that have been implemented so far, are:
+
+<h3>TrafficLoggerSimple : TrafficLogger</h3>
+Creates a record whenever a packet enters or leaves a simulation object.
+
+<table>
+<tr>
+<th>eventtype</th>
+<th>eventid</th>
+<th>objid</th>
+<th>val1</th>
+<th>val2</th>
+<th>val3</th>
+</tr>
+<tr>
+<td rowspan="5"><code>TRAFFIC_EVENT</code>=3</td>
+<td><code>PKT_ARRIVE</code>=0</td>
+<td rowspan="5">where the packet experienced this event</td>
+<td rowspan="5">pkt flow id</td>
+<td rowspan="5">pkt id</td>
+<td rowspan="5">0</td>
+</tr>
+<tr><td><code>PKT_DEPART</code>=1</td></tr>
+<tr><td><code>PKT_CREATESEND</code>=2</td></tr>
+<tr><td><code>PKT_DROP</code>=3</td></tr>
+<tr><td><code>PKT_RCVDESTROY</code>=4</td></tr>
+</table>
+
+<h3>QueueLoggerSimple : QueueLogger</h3>
+Creates a record whenever a packet arrives at a queue or departs.
+
+<table>
+<tr>
+<th>eventtype</th>
+<th>eventid</th>
+<th>objid</th>
+<th>val1</th>
+<th>val2</th>
+<th>val3</th>
+</tr>
+<tr>
+<td rowspan="3"><code>QUEUE_EVENT</code>=0</td>
+<td><code>PKT_ENQUEUE</code>=0</td>
+<td rowspan="3">the queue being logged</td>
+<td rowspan="3">queue size [bytes]</td>
+<td rowspan="3">pkt flow id</td>
+<td rowspan="3">pkt id</td>
+</tr>
+<tr><td><code>PKT_DROP</code>=1</td></tr>
+<tr><td><code>PKT_SERVICE</code>=2</td></tr>
+</table>
+
+<h3>QueueLoggerSampling : QueueLogger</h3>
+Creates these records periodically.
+
+<table>
+<tr>
+<th>eventtype</th>
+<th>eventid</th>
+<th>objid</th>
+<th>val1</th>
+<th>val2</th>
+<th>val3</th>
+</tr>
+<tr>
+<td><code>QUEUE_RECORD</code>=4</td>
+<td><code>CUM_TRAFFIC</code>=0</td>
+<td>the queue being logged</td>
+<td>time needed to serve <emph>all</emph> packets that have arrived so far [sec]</td>
+<td>total time spent idling so far [sec]</td>
+<td>time needed to serve all the packets that have been dropped so far [sec]</td>
+</tr>
+<tr>
+<td rowspan="2"><code>QUEUE_APPROX</code>=5</td>
+<td><code>QUEUE_RANGE</code>=0</td>
+<td rowspan="2">the queue being logged</td>
+<td>most recent queue size [bytes]</td>
+<td>minimum queue size seen since last log [bytes]</td>
+<td>maximum queue size seen since last log [bytes]</td>
+</tr>
+<tr>
+<td><code>QUEUE_OVERFLOW</code>=1</td>
+<td>&lt;0, if the queue has idled since the last log; else 0</td>
+<td>&gt;0, if the queue has dropped packets since the last log; else 0</td>
+<td>buffer size [bytes]</td>
+</tr>
+</table>
+
+<h3>TcpLoggerSimple : TcpLogger</h3>
+Creates these records whenever a TCP flow changes its state.
+
+<table>
+<tr>
+<th>eventtype</th>
+<th>eventid</th>
+<th>objid</th>
+<th>val1</th>
+<th>val2</th>
+<th>val3</th>
+</tr>
+<tr>
+<td rowspan="8"><code>TCP_EVENT</code>=1</td>
+<td><code>TCP_RCV</code>=0</td>
+<td rowspan="10">the TCP source being logged</td>
+<td rowspan="8">_cwnd [bytes]</td>
+<td rowspan="8">_unacked [bytes], a heuristic estimate of the number of unacked packets in flight</td>
+<td rowspan="8">_effcwnd [bytes], a heuristic estimate of current transmit rate * RTT</td>
+</tr>
+<tr><td><code>TCP_RCV_FR</code>=2</td></tr>
+<tr><td><code>TCP_RCV_FR_END</code>=1</td></tr>
+<tr><td><code>TCP_RCV_DUP_FR</code>=3</td></tr>
+<tr><td><code>TCP_RCV_DUP</code>=4</td></tr>
+<tr><td><code>TCP_RCV_3DUPNOFR</code>=5</td></tr>
+<tr><td><code>TCP_RCV_DUP_FASTXMIT</code>=6</td></tr>
+<tr><td><code>TCP_TIMEOUT</code>=7</td></tr>
+<tr>
+<td rowspan="2"><code>TCP_STATE</code>=2</td>
+<td><code>TCPSTATE_CNTRL</code>=0</td>
+<td>_cwnd [bytes]</td>
+<td>_ssthresh [bytes]</td>
+<td>_recoverq [bytes], i.e. the seqno that indicates the whole fast-recovery window has been sent</td>
+</tr>
+<tr>
+<td><code>TCPSTATE_SEQ</code>=1</td>
+<td>last_acked [bytes]</td>
+<td>highest_sent [bytes]</td>
+<td>dupacks</td>
+</tr>
+</table>
+
+<h3>AveragingTcpLogger</h3>
+Call <code>AveragingTcpLogger::monitorTcp</code> for a collection of different TCP flows. Thereafter,
+it will periodically record
+
+<table>
+<tr>
+<th>eventtype</th>
+<th>eventid</th>
+<th>objid</th>
+<th>val1</th>
+<th>val2</th>
+<th>val3</th>
+</tr>
+<tr>
+<td><code>TCP_RECORD</code>=6</td>
+<td><code>AVE_CWND</code>=0</td>
+<td>the flow-aggregate being logged</td>
+<td>average cwnd [bytes], flow-wise</td>
+<td>average unacked [bytes], flow-wise</td>
+<td>average effcwnd [bytes], flow-wise</td>
+</tr>
+</table>
+
+	
+
+<div class="footer">
+<code>D.Wischik</code><em>at</em><code>cs.ucl.ac.uk</code>
+</div>
+</body>
+
+</html>

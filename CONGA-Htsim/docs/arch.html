@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding='UTF-8'?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<head>
+<title>htsim architecture</title>
+<link rel=stylesheet type="text/css" href="htsim.css" title="Main">
+</head>
+<body>
+<div class="nav">
+<a href="index.html"><code>htsim</code></a> 
+&gt;&gt; 
+<a href="docs.html">documentation</a>
+&gt;&gt;
+simulator architecture
+</div>
+
+<h1>Simulator architecture</h1>
+
+<code>htsim</code> is an event-based simulator, 
+designed to simulate many TCP flows fast. The rest of the simulator is
+bare-bones.
+
+<h2>Base classes</h2>
+
+The basic classes are in <code>network.h</code>. They are
+
+<ul>
+<li><code>Packet</code></li>
+<li><code>PacketSink</code></li>
+</ul>
+
+Each <code>Packet</code> knows its route, namely a vector of <code>PacketSink</code>s. Whenever
+a <code>PacketSink</code> receives a <code>Packet</code> p, it processes it appropriately and may
+either drop the packet
+<pre class="codesnippet">
+p.free()
+</pre>
+or send it on its way
+<pre class="codesnippet">
+p.sendOn()
+</pre>
+
+Also, each packet belongs to a <code>PacketFlow</code> (it's useful
+to group packets into flows, for logging purposes). The flow and the route
+are specified when the packet is created, along with other useful information,
+e.g.
+<pre class="code">
+TrafficLoggerSimple tl;
+PacketFlow _myflow(tl);
+route_t myroute;
+myroute.push_back(hop1); myroute.push_back(hop2); // ...
+// then for each new packet
+TcpPacket* p = TcpPacket::newpkt(_flow, *_route, _last_acked+1, _mss);
+p->sendOn();
+</pre>
+In most cases, as illustrated here, we subclass 
+<code>Packet</code> to store extra protocol-specific information
+e.g. sequence number.
+
+<h2>Network objects</h2>
+
+The principal network objects are <code>TcpSrc</code>, <code>TcpSink</code>, <code>Queue</code> and <code>Pipe</code>. 
+They all inherit from <code>PacketSink</code>. <code>htsim</code> implement (roughly) TCP New Reno, with fast retransmit and fast recovery
+but without selective acknowledgement. Additionally, for speed, the TCP retransmit timers have coarse granularity: treat the results
+with suspicion if you see many flows entering timeouts.
+
+
+<h2>Event-based simulation</h2>
+
+<code>htsim</code> is an event-based simulation. There is a single <code>EventList</code> object which keeps track
+of which events need to occur when. Every object which wishes to be scheduled must inherit from <code>EventSource</code>, e.g.
+<pre class="code">
+class MyThing : public EventSource {
+public:
+  MyThing(simtime_picosec period, EventList& eventlist);
+  void doNextEvent();
+  simtime_picosec _period;
+  }
+MyThing::MyThing(simtime_picosec period, EventList& eventlist)
+: EventSource(eventlist,"mything") { // all event sources have names, used for logging
+  _period = period;
+  eventlist.sourceIsPendingRel(_period);
+  }
+void MyThing::doNextEvent() {
+  // do some work...
+  eventlist().sourceIsPendingRel(_period);  
+  // eventlist() returns the EventList specified when this object was created
+  // eventlist().now() is the current simulation time
+  // sourceIsPendingRel(t) means "schedule me for t from now", sourceIsPending() means "schedule me for time t"
+  } 
+</pre>
+
+Run a simulation by
+<pre class="code">
+EventList eventlist;
+eventlist.setEndtime(timeFromSec(60)); // if this is not set, the simulation will run until there are no events left to handle
+// build the simulation, and schedule the initial events
+while (eventlist.doNextEvent()) {} // run the simulation
+</pre>
+
+
+<div class="footer">
+<code>D.Wischik</code><em>at</em><code>cs.ucl.ac.uk</code>
+</div>
+</body>
+
+</html>

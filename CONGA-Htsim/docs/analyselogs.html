@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding='UTF-8'?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<head>
+<title>htsim log analysis</title>
+<link rel=stylesheet type="text/css" href="htsim.css" title="Main">
+</head>
+<body>
+<div class="nav">
+<a href="index.html"><code>htsim</code></a> 
+&gt;&gt; 
+<a href="docs.html">documentation</a>
+&gt;&gt; 
+<a href="logging.html">using logging</a>
+&gt;&gt;
+analysing logs in R
+</div>
+
+<h1>Analysing logs in R</h1>
+
+<p>
+R is a free open-source statistics package with excellent data-handling and
+visualisation routines <a href="http://www.r-project.org">[download R]</a>.
+</p>
+<p>
+The code to import a trace into R: <a href="../analysis/readdata.R"><code>readdata.R</code></a>.
+</p>
+Typical use, to plot the window size of a single TCP flow:
+
+<pre class="code">
+source('readdata.R')
+res <- parseTrace("log.dat")
+pktsize <- attr(res,'pktsize')
+xyplot(val2/pktsize~time,
+       data=res, subset = type=='tcp' & id=='tcp%1',
+       type='l')
+</pre>
+<a href="plottcp.png"><img src="plottcp.png" height="50" alt="output"/></a> 
+
+<p>
+A more advanced plot, using extra visualisation routines in <a href="../analysis/utils.R"><code>utils.R</code></a>:
+</p>
+
+<pre class="code">
+library('lattice')
+trellis.par.set(col.whitebg())
+source('readdata.R')
+source('utils.R')
+res <- parseTrace("log.dat")
+pktsize <- attr(res,'pktsize')
+servperflow <- attr(res,'bottleneckrate')/attr(res,'numflows')
+rescale <- res$type %in% c('queueapprox','tcp','tcprecord')
+res$val1[rescale] <- res$val1[rescale]/pktsize
+res$val2[rescale] <- res$val2[rescale]/pktsize
+res$val3[rescale] <- res$val3[rescale]/pktsize
+
+xyplot(val1~time | type,
+       z=res$val2, zz=res$val3,
+       ev=res$ev, objtype=res$type, objid=res$id,
+       data=res, subset= (type=='tcp' | type=='tcprecord' |
+         type=='queueapprox') & (id!='ratelim%1') &
+         time>40 & time<50,
+       panel=panel.obj, prepanel = prepanel.obj,
+       layout=c(1,3),
+       xlab='',ylab='',
+       scales=list(y=list(relation='free',rot=1.1)),
+       type='d'
+       )
+</pre>
+<a href="plotall.png"><img src="plotall.png" height="150" alt="output"/></a> 
+
+
+<div class="footer">
+<code>D.Wischik</code><em>at</em><code>cs.ucl.ac.uk</code>
+</div>
+</body>
+
+</html>

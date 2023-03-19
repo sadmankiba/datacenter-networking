@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding='UTF-8'?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<head>
+<title>htsim logging</title>
+<link rel=stylesheet type="text/css" href="htsim.css" title="Main">
+</head>
+<body>
+<div class="nav">
+<a href="index.html"><code>htsim</code></a> 
+&gt;&gt; 
+<a href="docs.html">documentation</a>
+&gt;&gt; 
+using logging
+</div>
+
+<h1>Using Logging</h1>
+
+Certain objects in the simulation (<code>TcpSrc</code>, <code>Queue</code>, etc.) may have an associated
+logger. This logger is specified when the object is created. Whenever the object undergoes a significant event,
+it notifies the logger.
+<p>
+Each different type of simulation object speaks to a different type of logger&mdash;since each simulation object has its own different significant events.
+For example, a <code>Queue</code> speaks to a <code>QueueLogger</code> with the routine
+<pre class="codesnippet">
+QueueLogger::logQueue(Queue& queue, QueueEvent ev, Packet& pkt)
+</pre>
+See below for a full list.
+</p>
+<p>
+Depending on how you want to record these events, you will use a different implementation of the logger.
+For example, <code>QueueLoggerSimple</code> makes a record for every packet that arrives or departs the queue,
+whereas <code>QueueLoggerAveraging</code> takes periodic snapshots of the queue (useful for keeping the logfile small).
+The currently implemented loggers are listed in <a href="loggers.html">loggers</a>.
+</p>
+<p>
+The loggers do not actually write their output directly; they call a <code>Logfile</code> object which actually does
+the writing.
+</p>
+<pre>
+                      +-------------------+
++------------+        | <a href="#loginterface">logger interfaces</a> |        +-----------------+         +----------+
+| simulation |  --->  | e.g. QueueLogger  |  --->  | <a href="loggers.html">logger</a>          |  --->   | <a href="logfile.html">logfile</a>  |
++------------+        | in loggertypes.h  |        | <a href="loggers.html">implementations</a> |         +----------+
+                      +-------------------+        +-----------------+
+</pre>
+
+
+<a name="preparing"><h2>Preparing the logger</h2></a>
+
+<pre class="code">
+Logfile logfile("output.dat");
+logfile.setStartTime(timeFromSec(40));
+QueueLoggerSimple logQueue1; 
+logfile.addLogger(logQueue1);
+// set up a simulation... including e.g.
+EventList eventlist;
+Queue queue1(SERVICE, BUFFER, eventlist, logQueue1);
+</pre>
+
+It can be helpful to assign memorable names to the items in the simulator. Many items derive from a class
+<code>Logged</code>, which simply keeps track of a unique ID and a memorable name. The <code>Logfile</code>
+can be told to keep track of which names go with which IDs.
+
+<pre class="code">
+queue1.setName("mybottleneckqueue");
+logfile.writeName(queue1);
+</pre>
+
+It can be helpful to record extra information in the logfile, e.g. describing the simulation setup.
+<pre class="code">
+logfile.write("numflows = 723");
+</pre>
+
+
+<a name="loginterface"><h2>Calling a logger from within the simulation</h2></a>
+
+The simulator may notify a logger of these events.
+
+<table>
+<tr>
+<th>logger interface</th>
+<th>argument</th>
+<th colspan="2">meaning</th>
+</tr>
+<tr>
+<td rowspan="7"><code>TrafficLogger::logTraffic</code>, invoked by most
+simulation objects when they receive or send a packet</td>
+<td colspan="2"><code>Packet& pkt</code>, the packet which has moved</td>
+</tr><tr>
+<td colspan="2"><code>Logged& location</code>, where the packet is moving</td>
+</tr><tr>
+<td rowspan="5"><code>TrafficEvent ev</code></td>
+<td><code>PKT_ARRIVE</code>, the packet arrived here</td>
+</tr>
+<tr><td><code>PKT_DEPART</code>, the packet left here</td></tr>
+<tr><td><code>PKT_CREATESENT</code>, the packet was created here then sent on</td></tr>
+<tr><td><code>PKT_DROP</code>, the packet was dropped here</td></tr>
+<tr><td><code>PKT_RCVDESTROY</code>, the packet arrived here and was disposed of</td></tr>
+<tr>
+<td rowspan="5"><code>QueueLogger::logQueue</code>, invoked by
+a <code>Queue</code> whenever it receives a packet or completes a service</td> 
+<td colspan="2"><code>Queue& queue</code>, the queue of interest</td>
+</tr>
+<tr>
+<td rowspan="3"><code>QueueEvent ev</code></td>
+<td><code>PKT_ENQUEUE</code>, an arriving packet was enqueued</td>
+</tr>
+<tr><td><code>PKT_DROP</code>, an arriving packet was dropped</td></tr>
+<tr><td><code>PKT_SERVICE</code>, a packet completed its service</td>
+</tr>
+<tr><td colspan="2"><code>Packet& pkt</code>, the packet in question</td></tr>
+<tr>
+<td rowspan="9"><code>TcpLogger::logTcp</code>,
+invoked by a TCP source whenever it updates its state</td>
+<td colspan="2"><code>TcpSrc& src</code>, the TCP source</td>
+</tr>
+<tr><td rowspan="8"><code>TcpEvent ev</code></td>
+<td><code>TCP_RCV</code></td></tr>
+<tr><td><code>TCP_RCV_FR_END</code></td></tr>
+<tr><td><code>TCP_RCV_FR</code></td></tr>
+<tr><td><code>TCP_RCV_DUP_FR</code></td></tr>
+<tr><td><code>TCP_RCV_DUP</code></td></tr>
+<tr><td><code>TCP_RCV_3DUPNOFR</code></td></tr>
+<tr><td><code>TCP_RCV_DUP_FASTXMIT</code></td></tr>
+<tr><td><code>TCP_TIMEOUT</code></td></tr>
+</tr>
+</table>
+
+<h2>Modifying/extending the logging system</h2>
+
+<ul>
+<li>If you extend the simulator by writing a new type of simulation object, you should
+write a new logger interface for it, and a new implementation of that interface
+</li>
+<li>If you find that these loggers do not record all the information you want, or if you want the information to be
+preprocessed differently, you should write a new implementation of the relevant logger
+</li>
+<li>
+If you want to output your data to a different system (e.g. Excel spreadsheet), rewrite <code>Logfile</code>
+</li>
+</ul>
+
+<h2>Analysing logs</h2>
+
+We provide an <a href="analyselogs.html">import routine</a> for reading logs into R.
+
+<div class="footer">
+<code>D.Wischik</code><em>at</em><code>cs.ucl.ac.uk</code>
+</div>
+</body>
+
+</html>
