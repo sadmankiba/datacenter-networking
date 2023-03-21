@@ -35,6 +35,7 @@ Pipe::doNextEvent()
     if (!_inflight.empty()) {
         // notify the eventlist we've another event pending
         simtime_picosec nexteventtime = _inflight.back().first;
-        EventList::Get().sourceIsPending(*this, nexteventtime);
+        // This is necessary coz receivePacket only adds event on empty _inflight
+        EventList::Get().sourceIsPending(*this, nexteventtime); 
     }
 }

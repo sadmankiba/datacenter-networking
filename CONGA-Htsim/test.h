@@ -18,6 +18,7 @@ typedef std::unordered_map<std::string,std::string> ArgList;
 void single_link_simulation(const ArgList &, Logfile &);
 void conga_testbed(const ArgList &, Logfile &);
 void fat_tree_testbed(const ArgList &, Logfile &);
+void simp_single_link(const ArgList &, Logfile &);
 
 /*
  * Setup testbed
@@ -42,7 +43,9 @@ run_experiment(uint32_t expt,
             // Run a fat-tree topology
             fat_tree_testbed(args, logfile);
             break;
-
+        case 4:
+            simp_single_link(args, logfile);
+            break;
         default:
             return -1;
     }
@@ -55,6 +58,7 @@ print_experiment_list()
     std::cerr << "  1" << " single_link_simulation" << std::endl;
     std::cerr << "  2" << " conga_testbed" << std::endl;
     std::cerr << "  3" << " fat_tree_testbed" << std::endl;
+    std::cerr << "  4" << " simp_single_link" << std::endl;
 }
 
 /* Helper functions for parsing arguments. */

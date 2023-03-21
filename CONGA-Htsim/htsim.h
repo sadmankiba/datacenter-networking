@@ -35,7 +35,7 @@
 /* Units */
 typedef uint64_t simtime_picosec;
 typedef uint64_t linkspeed_bps;
-typedef uint64_t mem_b;
+typedef uint64_t mem_b;     /* Size in bytes */
 typedef uint32_t addr_t;
 typedef uint16_t port_t;
 

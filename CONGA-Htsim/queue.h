@@ -22,6 +22,7 @@ class Queue : public EventSource, public PacketSink
             return (simtime_picosec)(pkt->size()) * _ps_per_byte;
         }
 
+        /* How many bits served in t ps */
         inline mem_b serviceCapacity(simtime_picosec t) {
             return (mem_b)(timeAsSec(t) * (double)_bitrate);
         }
@@ -36,8 +37,8 @@ class Queue : public EventSource, public PacketSink
             }
         }
 
-        mem_b _maxsize;   // Maximum queue size.
-        mem_b _queuesize; // Current queue size.
+        mem_b _maxsize;   // Maximum queue size in bytes.
+        mem_b _queuesize; // Current queue size in bytes.
 
     protected:
         // Start serving the item at the head of the queue.

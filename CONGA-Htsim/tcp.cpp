@@ -360,6 +360,7 @@ TcpSrc::inflateWindow()
     _cwnd += increment;
 }
 
+/* Sends MSS_BYTES (1500) sized packets until congestion window fills up. */
 void
 TcpSrc::sendPackets()
 {

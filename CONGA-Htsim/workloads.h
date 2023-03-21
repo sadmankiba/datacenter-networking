@@ -12,7 +12,7 @@ class Workloads
     public:
         /* Types of flow size distributions. */
         enum FlowDist {
-            UNIFORM,    // All flows are of the same size
+            UNIFORM,    // All flows are of the same size, (no interval between two consecutive flows)
             PARETO,     // Pareto distributed with shape (alpha) 1.2
             ENTERPRISE, // Enterprise workload from CONGA paper.
             DATAMINING  // Datamining workload from CONGA paper.
