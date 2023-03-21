@@ -9,10 +9,13 @@
 #include "pipe.h"
 #include "test.h"
 
-route_t rfwd, rbck;
-void routeAssign(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst);
+namespace simp_single {
+    route_t rfwd, rbck;
+    void routeAssign(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst);
+}
 
 using namespace std;
+using namespace simp_single;
 
 void
 simp_single_link(const ArgList &args, Logfile &logfile)
@@ -51,7 +54,7 @@ simp_single_link(const ArgList &args, Logfile &logfile)
     EventList::Get().setEndtime(timeFromUs(200));
 }
 
-void routeAssign(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {
+void simp_single::routeAssign(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {
     fwd = new route_t(rfwd); rev = new route_t(rbck); 
     src = 0; dst = 1;
 }

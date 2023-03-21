@@ -13,15 +13,18 @@
 #include "prof.h"
 
 #include <vector>
+#include <unordered_map>
 
 class QueueLoggerSimple : public Logger, public QueueLogger
 {
     public:
         void logQueue(Queue& queue, QueueLogger::QueueEvent ev, Packet& pkt)
         {
-            _logfile->writeRecord(QueueLogger::QUEUE_EVENT, queue.id, ev,
-                    (double)queue._queuesize, pkt.flow().id, pkt.id());
+            _logfile->writeRecordWithTxt(QueueLogger::QUEUE_EVENT, queue.id, _queueEvMap[ev], ev,
+                    "queuesize", (double)queue._queuesize, "flow id", pkt.flow().id, "pkt id", pkt.id());
         }
+    private:
+        std::unordered_map<uint8_t, std::string> _queueEvMap = {{0, "PKT_ENQUEUE"}, {1, "PKT_DROP"}, {2, "PKT_SERVICE"}};
 };
 
 class TrafficLoggerSimple : public Logger, public TrafficLogger

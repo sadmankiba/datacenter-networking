@@ -3,6 +3,8 @@
  */
 #include "logfile.h"
 
+#include <stdlib.h>
+
 using namespace std;
 
 Logfile::Logfile(const string &filename, 
@@ -75,6 +77,13 @@ Logfile::writeName(Logged &logged)
 }
 
 void
+Logfile::writeRecordWithTxt(uint32_t type, uint32_t id, string evstr, uint32_t ev, string val1str, double val1, string val2str, double val2, string val3str, double val3) {
+    fprintf(_txt_file, "%f: %s: %s: %s: %s-%f, %s-%f, %s-%f\n",timeAsSec(EventList::Get().now()), _evTypeMap[type].c_str(), _idNameMap[id].c_str(), 
+        evstr.c_str(), val1str.c_str(), val1, val2str.c_str(), val2, val3str.c_str(), val3);
+    writeRecord(type, id, ev, val1, val2, val3);
+}
+
+void
 Logfile::writeRecord(uint32_t type, 
                      uint32_t id, 
                      uint32_t ev, 
@@ -99,8 +108,6 @@ Logfile::writeRecord(uint32_t type,
 
     _nRecords++;
     _nTotalRecords++;
-    
-    fprintf(_txt_file, "%f: %s: %s: %d: %f, %f, %f\n", _records[i].time, _evTypeMap[type].c_str(), _idNameMap[id].c_str(), ev, val1, val2, val3);
 
     // Flush to file if buffer full.
     if (_nRecords == MAX_RECORDS) {
