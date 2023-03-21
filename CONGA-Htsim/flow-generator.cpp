@@ -25,7 +25,9 @@ FlowGenerator::FlowGenerator(DataSource::EndHost ehproto,
     _concurrentFlows(0),
     _avgOffTime(0),
     _flowTrace(),
-    _liveFlows()
+    _liveFlows(),
+    _pktlogger(nullptr),
+    _tcplogger(nullptr)
 {
     double flowsPerSec = _flowRate / (_workload._avgFlowSize * 8.0);
     _avgFlowArrivalTime = timeFromSec(1) / flowsPerSec;
@@ -180,7 +182,9 @@ FlowGenerator::createFlow(uint64_t flowSize,
 
         default: { // TCP variant
                      // TODO: option to supply logtcp.
-                     src = new TcpSrc(NULL, NULL, flowSize);
+                     if (_pktlogger && _tcplogger) {
+                        src = new TcpSrc(_tcplogger, _pktlogger, flowSize);
+                     } else src = new TcpSrc(NULL, NULL, flowSize);
                      snk = new TcpSink();
 
                      if (_ehproto == DataSource::DCTCP || _ehproto == DataSource::D_DCTCP) {

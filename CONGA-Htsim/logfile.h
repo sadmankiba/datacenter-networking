@@ -4,6 +4,7 @@
 #ifndef LOGFILE_H
 #define LOGFILE_H
 
+#include "htsim.h"
 #include "eventlist.h"
 
 #include <string>
@@ -30,14 +31,6 @@ struct __attribute__((__packed__)) Record {
 
 class Logfile;
 
-class Logger
-{
-    friend class Logfile;
-    protected:
-    void setLogfile(Logfile &logfile) { _logfile = &logfile; }
-    Logfile *_logfile;
-};
-
 class Logfile
 {
     public:
@@ -46,9 +39,8 @@ class Logfile
                 simtime_picosec end = ULLONG_MAX);
         ~Logfile();
 
-        void addLogger(Logger &logger);
         void write(const std::string &msg);
-        void writeName(Logged &logged);
+        void writeName(uint32_t id, std::string name);
         void writeRecordWithTxt(uint32_t type, uint32_t id, std::string evstr, uint32_t ev, 
             std::string val1str, double val1, std::string val2str, double val2, 
             std::string val3str, double val3);

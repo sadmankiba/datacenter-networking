@@ -27,7 +27,7 @@ class QueueLoggerSimple : public Logger, public QueueLogger
         std::unordered_map<uint8_t, std::string> _queueEvMap = {{0, "PKT_ENQUEUE"}, {1, "PKT_DROP"}, {2, "PKT_SERVICE"}};
 };
 
-class TrafficLoggerSimple : public Logger, public TrafficLogger
+class TrafficLoggerSimple : public TrafficLogger
 {
     public:
         void logTraffic(Packet& pkt, Logged& location, TrafficEvent ev)
@@ -37,7 +37,7 @@ class TrafficLoggerSimple : public Logger, public TrafficLogger
         }
 };
 
-class TcpLoggerSimple : public Logger, public TcpLogger
+class TcpLoggerSimple : public TcpLogger
 {
     public:
         void logTcp(TcpSrc &tcp, TcpEvent ev)

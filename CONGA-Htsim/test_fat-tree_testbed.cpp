@@ -92,20 +92,20 @@ fat_tree_testbed(const ArgList &args,
                 // Uplink
                 createQueue(QueueType, qAggCore[i][j][k], AGG_CORE_SPEED, AGG_CORE_BUFFER, logfile);
                 qAggCore[i][j][k]->setName("q-agg-core-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(qAggCore[i][j][k]));
+                logfile.writeName(qAggCore[i][j][k]->id, qAggCore[i][j][k]->str());
 
                 pAggCore[i][j][k] = new Pipe(timeFromUs(LINK_DELAY));
                 pAggCore[i][j][k]->setName("p-agg-core-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(pAggCore[i][j][k]));
+                logfile.writeName(pAggCore[i][j][k]->id, pAggCore[i][j][k]->str());
 
                 // Downlink
                 createQueue(QueueType, qCoreAgg[i][j][k], AGG_CORE_SPEED, CORE_AGG_BUFFER, logfile);
                 qCoreAgg[i][j][k]->setName("q-core-agg-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(qCoreAgg[i][j][k]));
+                logfile.writeName(qCoreAgg[i][j][k]->id, qCoreAgg[i][j][k]->str());
 
                 pCoreAgg[i][j][k] = new Pipe(timeFromUs(LINK_DELAY));
                 pCoreAgg[i][j][k]->setName("p-core-agg-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(pCoreAgg[i][j][k]));
+                logfile.writeName(pCoreAgg[i][j][k]->id, pCoreAgg[i][j][k]->str());
             }
         }
     }
@@ -117,20 +117,20 @@ fat_tree_testbed(const ArgList &args,
                 // Uplink
                 createQueue(QueueType, qTorAgg[i][j][k], TOR_AGG_SPEED, TOR_AGG_BUFFER, logfile);
                 qTorAgg[i][j][k]->setName("q-tor-agg-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(qTorAgg[i][j][k]));
+                logfile.writeName(qTorAgg[i][j][k]->id, qTorAgg[i][j][k]->str());
 
                 pTorAgg[i][j][k] = new Pipe(timeFromUs(LINK_DELAY));
                 pTorAgg[i][j][k]->setName("p-tor-agg-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(pTorAgg[i][j][k]));
+                logfile.writeName(pTorAgg[i][j][k]->id, pTorAgg[i][j][k]->str());
 
                 // Downlink
                 createQueue(QueueType, qAggTor[i][j][k], TOR_AGG_SPEED, AGG_TOR_BUFFER, logfile);
                 qAggTor[i][j][k]->setName("q-agg-tor-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(qAggTor[i][j][k]));
+                logfile.writeName(qAggTor[i][j][k]->id, qAggTor[i][j][k]->str());
 
                 pAggTor[i][j][k] = new Pipe(timeFromUs(LINK_DELAY));
                 pAggTor[i][j][k]->setName("p-agg-tor-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(pAggTor[i][j][k]));
+                logfile.writeName(pAggTor[i][j][k]->id, pAggTor[i][j][k]->str());
             }
         }
     }
@@ -142,20 +142,20 @@ fat_tree_testbed(const ArgList &args,
                 // Uplink
                 createQueue(fairqueue, qServerTor[i][j][k], SERVER_TOR_SPEED, ENDH_BUFFER, logfile);
                 qServerTor[i][j][k]->setName("q-server-tor-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(qServerTor[i][j][k]));
+                logfile.writeName(qServerTor[i][j][k]->id, qServerTor[i][j][k]->str());
 
                 pServerTor[i][j][k] = new Pipe(timeFromUs(LINK_DELAY));
                 pServerTor[i][j][k]->setName("p-server-tor-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(pServerTor[i][j][k]));
+                logfile.writeName(pServerTor[i][j][k]->id, pServerTor[i][j][k]->str());
 
                 // Downlink
                 createQueue(QueueType, qTorServer[i][j][k], SERVER_TOR_SPEED, TOR_SERVER_BUFFER, logfile);
                 qTorServer[i][j][k]->setName("q-tor-server-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(qTorServer[i][j][k]));
+                logfile.writeName(qTorServer[i][j][k]->id, qTorServer[i][j][k]->str());
 
                 pTorServer[i][j][k] = new Pipe(timeFromUs(LINK_DELAY));
                 pTorServer[i][j][k]->setName("p-tor-server-" + to_string(i) + "-" + to_string(j) + "-" + to_string(k));
-                logfile.writeName(*(pTorServer[i][j][k]));
+                logfile.writeName(pTorServer[i][j][k]->id, pTorServer[i][j][k]->str());
             }
         }
     }
@@ -305,7 +305,7 @@ fat_tree::createQueue(string &qType,
 #else
     QueueLoggerSampling *qs = new QueueLoggerSampling(timeFromMs(10));
 #endif
-    logfile.addLogger(*qs);
+    qs->setLogfile(logfile);
 
     if (qType == "fq") {
         queue = new FairQueue(speed, buffer, qs);

@@ -53,19 +53,19 @@ void single_link_simulation(const ArgList &args, Logfile &logfile)
     parseInt(args, "afqAlpha", afqcfg.alpha);
 
     QueueLoggerSampling *qs = new QueueLoggerSampling(timeFromUs(10));
-    logfile.addLogger(*qs);
+    qs->setLogfile(logfile);
 
     TcpLoggerSimple *logTcp = new TcpLoggerSimple();
-    logfile.addLogger(*logTcp);
+    logTcp->setLogfile(logfile);
 
     // Build the network
     Pipe *pipeFwd = new Pipe(timeFromUs(LinkDelay/2));
     pipeFwd->setName("pipeFwd");
-    logfile.writeName(*pipeFwd);
+    logfile.writeName(pipeFwd->id, pipeFwd->str());
 
     Pipe *pipeRev = new Pipe(timeFromUs(LinkDelay/2));
     pipeRev->setName("pipeRev");
-    logfile.writeName(*pipeRev);
+    logfile.writeName(pipeRev->id, pipeRev->str());
 
     Queue *queueFwd;
     if (QueueType == "fq") {
@@ -79,11 +79,11 @@ void single_link_simulation(const ArgList &args, Logfile &logfile)
     }
 
     queueFwd->setName("queueFwd");
-    logfile.writeName(*queueFwd);
+    logfile.writeName(queueFwd->id, queueFwd->str());
 
     Queue *queueRev = new Queue(LinkSpeed, LinkBuffer, NULL);
     queueRev ->setName("queueRev");
-    logfile.writeName(*queueRev);
+    logfile.writeName(queueRev->id, queueRev->str());
 
     routeFwd.push_back(queueFwd);
     routeFwd.push_back(pipeFwd);

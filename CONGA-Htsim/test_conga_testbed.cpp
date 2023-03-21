@@ -42,16 +42,16 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     Pipe *pipebck = new Pipe(timeFromUs(8));
     pipebck->setName("pipebck");
 
-    logfile.writeName(*pipefwd);
-    logfile.writeName(*pipebck);
+    logfile.writeName(pipefwd->id, pipefwd->str());
+    logfile.writeName(pipebck->id, pipebck->str());
 
     Queue *qfwd = new FairQueue(1000, 40, nullptr);
     qfwd->setName("qfwd");
     Queue *qbck = new FairQueue(2400, 30, nullptr);
     qbck->setName("qbck");
 
-    logfile.writeName(*qfwd);
-    logfile.writeName(*qbck);
+    logfile.writeName(qfwd->id, qfwd->str());
+    logfile.writeName(qbck->id, qbck->str());
 
     rfwd.push_back(qfwd);
     rfwd.push_back(pipefwd);

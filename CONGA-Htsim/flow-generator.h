@@ -48,6 +48,14 @@ class FlowGenerator : public EventSource
         /* Flow arrival using a trace instead of dynamic generation during simulation. */
         void setTrace(std::string filename);
 
+        void setTrafficLogger(TrafficLogger *pktlogger) {
+            _pktlogger = pktlogger;
+        }
+
+        void setTcpLogger(TcpLogger *tcplogger) {
+            _tcplogger = tcplogger;
+        }
+
         /* Used by Source to notify the Generator of flow finishing, which can then
          * (optionally) generate a new flow. */
         void finishFlow(uint32_t flow_id);
@@ -92,6 +100,9 @@ class FlowGenerator : public EventSource
 
         // Custom flow size distribution.
         std::map<double,uint64_t> _flowSizeCDF;
+
+        TrafficLogger *_pktlogger;
+        TcpLogger *_tcplogger;
 };
 
 #endif /* FLOW_GENERATOR_H */

@@ -5,7 +5,7 @@
 #define EVENTLIST_H
 
 #include "htsim.h"
-#include "loggertypes.h"
+#include "logged.h"
 
 #include <map>
 #include <string>

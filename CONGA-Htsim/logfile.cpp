@@ -56,12 +56,6 @@ Logfile::~Logfile()
     fclose(_txt_file);
 }
 
-void
-Logfile::addLogger(Logger &logger)
-{
-    logger.setLogfile(*this);
-}
-
 void 
 Logfile::write(const string &msg)
 {
@@ -69,11 +63,9 @@ Logfile::write(const string &msg)
 }
 
 void
-Logfile::writeName(Logged &logged)
-{
-    string buffer = logged.str() + "=" + to_string(logged.id) + "\n";
-    fputs(buffer.c_str(), _id_file);
-    _idNameMap[logged.id] = logged.str();
+Logfile::writeName(uint32_t id, string name) {
+    write(name + "=" + to_string(id) + "\n");
+    _idNameMap[id] = name;
 }
 
 void

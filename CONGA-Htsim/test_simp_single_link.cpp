@@ -25,18 +25,18 @@ simp_single_link(const ArgList &args, Logfile &logfile)
     Pipe *pipebck = new Pipe(timeFromUs(8));
     pipebck->setName("pipebck");
 
-    logfile.writeName(*pipefwd);
-    logfile.writeName(*pipebck);
+    logfile.writeName(pipefwd->id, pipefwd->str());
+    logfile.writeName(pipebck->id, pipebck->str());
 
     QueueLoggerSimple *ql = new QueueLoggerSimple();
-    logfile.addLogger(*ql);
+    ql->setLogfile(logfile);
     Queue *qfwd = new Queue(1000000000, 10000, ql);
     qfwd->setName("qfwd");
     Queue *qbck = new Queue(1000000000, 4000, nullptr);
     qbck->setName("qbck");
 
-    logfile.writeName(*qfwd);
-    logfile.writeName(*qbck);
+    logfile.writeName(qfwd->id, qfwd->str());
+    logfile.writeName(qbck->id, qfwd->str());
 
     rfwd.push_back(qfwd);
     rfwd.push_back(pipefwd);
@@ -45,10 +45,18 @@ simp_single_link(const ArgList &args, Logfile &logfile)
     
     DataSource::EndHost eh = DataSource::TCP;
     Workloads::FlowDist fd = Workloads::UNIFORM;
+    TcpLoggerSimple *_tcplogger = new TcpLoggerSimple();
+    _tcplogger->setLogfile(logfile);
 
+    TrafficLoggerSimple *_pktlogger = new TrafficLoggerSimple();
+    _pktlogger->setLogfile(logfile);
+
+    // Avg flow arrival time = 1500 * 5 * 8 / 10^9 = 60 us
     FlowGenerator *fg = new FlowGenerator(eh, routeAssign, 1000000000, MSS_BYTES * 5, fd); 
 
     fg->setEndhostQueue(2000000000, 1000000);
+    fg->setTrafficLogger(_pktlogger);
+    fg->setTcpLogger(_tcplogger);
     fg->setTimeLimits(0, timeFromUs(200) - 1);
 
     EventList::Get().setEndtime(timeFromUs(200));

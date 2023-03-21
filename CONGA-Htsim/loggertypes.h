@@ -4,35 +4,27 @@
 #ifndef LOGGERTYPES_H
 #define LOGGERTYPES_H
 
+#include "logfile.h"
+#include "logged.h"
+
 #include <string>
 
 class Packet;
 class TcpSrc;
 class Queue;
 
-/* A class that Logs */
-class Logged
+class Logger
 {
+    friend class Logfile;
 public:
-    Logged(const std::string &name)
-    {
-        _name = name;
-        id = LASTIDNUM;
-        Logged::LASTIDNUM++;
-    }
-
-    virtual ~Logged() {}
-
-    void setName(const std::string &name) { _name = name; }
-    virtual const std::string& str() { return _name; };
-
-    uint32_t id;
-private:
-    static uint32_t LASTIDNUM;
-    std::string _name;
+    void setLogfile(Logfile &logfile) { _logfile = &logfile; }
+protected:
+    Logfile *_logfile;
 };
 
-class TrafficLogger
+
+
+class TrafficLogger: public Logger
 {
 public:
     enum EventType { TRAFFIC_EVENT = 3 };
@@ -71,7 +63,7 @@ public:
     virtual ~QueueLogger(){};
 };
 
-class TcpLogger
+class TcpLogger: public Logger
 {
 public:
     enum EventType {
