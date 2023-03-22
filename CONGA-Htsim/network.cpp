@@ -41,7 +41,7 @@ void
 PacketFlow::logTraffic(Packet &pkt, 
                        Logged &location, 
                        TrafficLogger::TrafficEvent ev)
-{
+{   
     if (_logger) {
         _logger->logTraffic(pkt, location, ev);
     }

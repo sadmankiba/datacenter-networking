@@ -184,7 +184,9 @@ FlowGenerator::createFlow(uint64_t flowSize,
                      // TODO: option to supply logtcp.
                      if (_pktlogger && _tcplogger) {
                         src = new TcpSrc(_tcplogger, _pktlogger, flowSize);
-                     } else src = new TcpSrc(NULL, NULL, flowSize);
+                     } else {
+                        src = new TcpSrc(NULL, NULL, flowSize);
+                     }
                      snk = new TcpSink();
 
                      if (_ehproto == DataSource::DCTCP || _ehproto == DataSource::D_DCTCP) {
@@ -206,7 +208,7 @@ FlowGenerator::createFlow(uint64_t flowSize,
 
     routeFwd->push_back(snk);
     routeRev->push_back(src);
-    src->connect(start_time, *routeFwd, *routeRev, *snk);
+    src->connect(start_time, *routeFwd, *routeRev, *snk); // Sets an event to start generating packet
     src->setFlowGenerator(this);
 
     _liveFlows[src->id] = src;

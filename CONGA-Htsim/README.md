@@ -14,6 +14,7 @@ Added features to implement CONGA in Htsim-
 
 Htsim modifications
 - Log records in txt format
+- Allow traffic and tcp logging from FlowGenerator class.
 
 Notes-
 - Node in Htsim means endhost.

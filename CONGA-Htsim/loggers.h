@@ -32,9 +32,12 @@ class TrafficLoggerSimple : public TrafficLogger
     public:
         void logTraffic(Packet& pkt, Logged& location, TrafficEvent ev)
         {
-            _logfile->writeRecord(TrafficLogger::TRAFFIC_EVENT, location.id,
-                    ev,pkt.flow().id, pkt.id(), 0);
+            _logfile->writeRecordWithTxt(TrafficLogger::TRAFFIC_EVENT, location.id,
+                   _trafficEvMap[ev], ev, "flow id", pkt.flow().id, "pkt id", pkt.id(), "unused", 0);
         }
+    private: 
+        std::unordered_map<uint8_t, std::string> _trafficEvMap = {{0, "PKT_ARRIVE"}, {1, "PKT_DEPART"}, {2, "PKT_CREATESEND"}, 
+                {3, "PKT_DROP"}, {4, "PKT_RCVDESTROY"}};
 };
 
 class TcpLoggerSimple : public TcpLogger
@@ -42,15 +45,24 @@ class TcpLoggerSimple : public TcpLogger
     public:
         void logTcp(TcpSrc &tcp, TcpEvent ev)
         {
-            _logfile->writeRecord(TcpLogger::TCP_EVENT, tcp.id, ev, tcp._cwnd,
-                    tcp._highest_sent - tcp._last_acked, tcp._state);
+            _logfile->writeRecordWithTxt(TcpLogger::TCP_EVENT, tcp.id, _tcpEvMap[ev], ev, "cwnd", tcp._cwnd,
+                   "sendbuf size", tcp._highest_sent - tcp._last_acked, "TCP state", tcp._state);
 
-            _logfile->writeRecord(TcpLogger::TCP_STATE, tcp.id, TcpLogger::TCPSTATE_CNTRL,
-                    tcp._cwnd, tcp._ssthresh, tcp._recover_seq);
+            _logfile->writeRecordWithTxt(TcpLogger::TCP_STATE, tcp.id, "TCPSTATE_CNTRL", TcpLogger::TCPSTATE_CNTRL,
+                    "cwnd", tcp._cwnd, "ssthresh", tcp._ssthresh, "recover seq", tcp._recover_seq);
 
-            _logfile->writeRecord(TcpLogger::TCP_STATE, tcp.id, TcpLogger::TCPSTATE_SEQ,
-                    tcp._last_acked, tcp._highest_sent, tcp._RFC2988_RTO_timeout);
+            _logfile->writeRecordWithTxt(TcpLogger::TCP_STATE, tcp.id, "TCPSTATE_SEQ", TcpLogger::TCPSTATE_SEQ,
+                    "last_acked", tcp._last_acked, "highest_sent", tcp._highest_sent, "RTO timeout", tcp._RFC2988_RTO_timeout);
         }
+    private:
+        std::unordered_map<uint8_t, std::string> _tcpEvMap = {{0, "TCP_RCV"},
+        {1, "TCP_RCV_FR_END"},
+        {2, "TCP_RCV_FR"},
+        {3, "TCP_RCV_DUP_FR"},
+        {4, "TCP_RCV_DUP"},
+        {5, "TCP_RCV_3DUPNOFR"},
+        {6, "TCP_RCV_DUP_FASTXMIT"},
+        {7, "TCP_TIMEOUT"}};
 };
 
 class QueueLoggerSampling : public Logger, public QueueLogger, public EventSource
@@ -94,7 +106,7 @@ class SinkLoggerSampling : public Logger, public EventSource
 };
 
 #if MING_PROF
-class TcpLoggerSampling : public Logger, public TcpLogger, public EventSource
+class TcpLoggerSampling : public TcpLogger, public EventSource
 {
     public:
         TcpLoggerSampling(simtime_picosec period);
