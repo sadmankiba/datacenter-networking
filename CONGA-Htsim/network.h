@@ -16,17 +16,25 @@ typedef std::vector<PacketSink*> route_t;
 typedef std::vector<route_t*> routes_t;
 typedef uint32_t packetid_t;
 
+struct vxlan_t {
+    uint8_t src;
+    uint8_t dst;
+    uint8_t lbtag;
+    uint8_t ce;
+}
+
 // See datapacket.h to illustrate how Packet is typically used.
 class Packet
 {
     friend class PacketFlow;
-    public:
+public:
     /* Flag types. */
     enum PacketFlag {
         ECN_FWD = 0,
         ECN_REV = 1,
         PP_FIRST = 2,
-        DEADLINE = 3
+        DEADLINE = 3, 
+        ACK = 4;
     };
 
     Packet() {};
@@ -49,7 +57,8 @@ class Packet
 
     inline void setPriority(uint32_t p) {_priority = p;}
     inline uint32_t getPriority() {return _priority;}
-
+    
+    struct vxlan_t vxlan; 
     protected:
     void set(PacketFlow &flow, route_t &route, mem_b pkt_size, packetid_t id);
 

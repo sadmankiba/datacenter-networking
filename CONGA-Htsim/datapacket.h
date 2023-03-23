@@ -58,6 +58,7 @@ class DataAck : public Packet
             p->set(flow, route, ACK_SIZE, ackno);
             p->_seqno = seqno;
             p->_ackno = ackno;
+            p->setFlag(Packet::ACK);
             flow._nPackets++;
             return p;
         }
