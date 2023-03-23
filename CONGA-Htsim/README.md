@@ -6,6 +6,9 @@ make
 ./htsim --expt=1
 ```
 
+Implementation walkthrough
+- First performed congestion information forwarding and receiving in a very simple setup - 1 core router and 2 leaf switches / ToRs.
+
 Added features to implement CONGA in Htsim-
 - Measure congestion at intermediate switches (PacketSinks) for each egress port.
 - Add tunnel header fields in packet.

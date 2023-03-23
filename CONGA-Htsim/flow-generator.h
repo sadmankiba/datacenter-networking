@@ -22,7 +22,8 @@
  * params
  * - route fwd: List of PacketSinks in forward direction.
  * - route rev: List of PacketSinks in reverse direction.
- * - src:  
+ * - src: An integer assigned by user as node id for src. Only for logging purpose.
+ * - dst: An integer assigned by user as node id for dst. Only for logging purpose.
  */
 typedef std::function<void(route_t *&, route_t *&, uint32_t &, uint32_t &)> route_gen_t;
 

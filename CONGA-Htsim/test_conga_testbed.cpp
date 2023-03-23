@@ -9,9 +9,6 @@
 #include "pipe.h"
 #include "test.h"
 
-route_t rfwd, rbck;
-void routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst);
-
 namespace conga {
 
     // tesdbed configuration
@@ -26,7 +23,8 @@ namespace conga {
     const uint64_t LEAF_SPEED = 10000000000; // 10gbps
     const uint64_t CORE_SPEED = 40000000000; // 40gbps
 
-    
+    route_t rfwd, rbck;
+    void routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst);
 }
 
 using namespace std;
@@ -37,6 +35,14 @@ using namespace conga;
 void
 conga_testbed(const ArgList &args, Logfile &logfile)
 {
+    // 4 link testbed
+    rfwd.push_back(srcQ);
+    DataSource::EndHost eh = DataSource::TCP;
+    linkspeed_bps flowRate = 1000000000; // 1Gb
+    uint32_t avgFlowSize = MSS_BYTES * 10;
+    Workloads::FlowDist flowSizeDist = Workloads::UNIFORM;
+    FlowGenerator(eh, routeGenerate, flowRate, avgFlowSize, flowSizeDist);
+
     Pipe *pipefwd = new Pipe(timeFromUs(10));
     pipefwd->setName("pipefwd");
     Pipe *pipebck = new Pipe(timeFromUs(8));
@@ -69,7 +75,7 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     EventList::Get().setEndtime(timeFromUs(200));
 }
 
-void routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {
+void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {
     fwd = new route_t(rfwd); rev = new route_t(rbck); 
     src = 0; dst = 1;
 }
