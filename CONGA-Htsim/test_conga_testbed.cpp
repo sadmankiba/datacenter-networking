@@ -30,49 +30,59 @@ namespace conga {
 using namespace std;
 using namespace conga;
 
-
-
 void
 conga_testbed(const ArgList &args, Logfile &logfile)
 {
+    Queue *qServerToR[2];
+    Pipe *pServerToR[2];
+
+    Queue *qToRServer[2];
+    Pipe *pToRServer[2];
+    
+    Queue *qToRCore[2];
+    Pipe *pToRCore[2];
+
+    Queue *qCoreToR[2];
+    Pipe *pCoreToR[2];
+
+    vector<Queue **> vQ = {&qServerToR, &qToRServer, &qToRCore, &qCoreToR};
+    for (Queue **Q: vQ)
+        for(int i = 0; i < 2; i++)
+            Q[i] = new Queue(1000000000, 10000, nullptr);
+
+    vector<Pipe **> vP = {&pServerToR, &pToRServer, &pToRCore, &pCoreToR};
+    for (Pipe **P: vP)
+        for(int i = 0; i < 2; i++)
+            P[i] = new Pipe(timeFromUs(6));
+
     // 4 link testbed
-    rfwd.push_back(srcQ);
+    rfwd.push_back(qServerToR[0]);
+    rfwd.push_back(pServerToR[0]);
+    rfwd.push_back(qToRCore[0]);
+    rfwd.push_back(pToRCore[0]);
+    rfwd.push_back(qCoreToR[1]);
+    rfwd.push_back(pCoreToR[1]);
+    rfwd.push_back(qToRServer[1]);
+    rfwd.push_back(pToRServer[1]);
+
+    rbck.push_back(qServerToR[1]);
+    rbck.push_back(pServerToR[1]);
+    rbck.push_back(qToRCore[1]);
+    rbck.push_back(pToRCore[1]);
+    rbck.push_back(qCoreToR[0]);
+    rbck.push_back(pCoreToR[0]);
+    rbck.push_back(qToRServer[0]);
+    rbck.push_back(pToRServer[0]);
+
     DataSource::EndHost eh = DataSource::TCP;
     linkspeed_bps flowRate = 1000000000; // 1Gb
     uint32_t avgFlowSize = MSS_BYTES * 10;
     Workloads::FlowDist flowSizeDist = Workloads::UNIFORM;
-    FlowGenerator(eh, routeGenerate, flowRate, avgFlowSize, flowSizeDist);
+    FlowGenerator *fg = new FlowGenerator(eh, routeGenerate, flowRate, avgFlowSize, flowSizeDist);
 
-    Pipe *pipefwd = new Pipe(timeFromUs(10));
-    pipefwd->setName("pipefwd");
-    Pipe *pipebck = new Pipe(timeFromUs(8));
-    pipebck->setName("pipebck");
+    fg->setTimeLimits(0, timeFromUs(4000) - 1);
 
-    logfile.writeName(pipefwd->id, pipefwd->str());
-    logfile.writeName(pipebck->id, pipebck->str());
-
-    Queue *qfwd = new FairQueue(1000, 40, nullptr);
-    qfwd->setName("qfwd");
-    Queue *qbck = new FairQueue(2400, 30, nullptr);
-    qbck->setName("qbck");
-
-    logfile.writeName(qfwd->id, qfwd->str());
-    logfile.writeName(qbck->id, qbck->str());
-
-    rfwd.push_back(qfwd);
-    rfwd.push_back(pipefwd);
-    rbck.push_back(qbck);
-    rbck.push_back(pipebck);
-    
-    DataSource::EndHost eh = DataSource::TCP;
-    Workloads::FlowDist fd = Workloads::UNIFORM;
-
-    FlowGenerator *fg = new FlowGenerator(eh, routeGenerate, 200, 60, fd); 
-
-    fg->setEndhostQueue(500, 25);
-    fg->setTimeLimits(0, timeFromUs(200) - 1);
-
-    EventList::Get().setEndtime(timeFromUs(200));
+    EventList::Get().setEndtime(timeFromUs(4000));
 }
 
 void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {
