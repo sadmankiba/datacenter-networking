@@ -56,6 +56,10 @@ class FlowGenerator : public EventSource
             _tcplogger = tcplogger;
         }
 
+        void setLogFile(Logfile *logfile) {
+            _logfile = logfile;
+        }
+
         /* Used by Source to notify the Generator of flow finishing, which can then
          * (optionally) generate a new flow. */
         void finishFlow(uint32_t flow_id);
@@ -103,6 +107,7 @@ class FlowGenerator : public EventSource
 
         TrafficLogger *_pktlogger;
         TcpLogger *_tcplogger;
+        Logfile *_logfile;
 };
 
 #endif /* FLOW_GENERATOR_H */

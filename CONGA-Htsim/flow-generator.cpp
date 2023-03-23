@@ -164,6 +164,8 @@ FlowGenerator::createFlow(uint64_t flowSize,
     if (_endhostQ) {
         Queue *endhostQ = new Queue(_endhostQrate, _endhostQbuffer, NULL);
         routeFwd->insert(routeFwd->begin(), endhostQ);
+        endhostQ->setName(_prefix + "endhostQ" + to_string(_flowsGenerated));
+        if (_logfile) _logfile->writeName(endhostQ->id, endhostQ->str());
     }
 
     DataSource *src;
@@ -201,6 +203,10 @@ FlowGenerator::createFlow(uint64_t flowSize,
 
     src->setName(_prefix + "src" + to_string(_flowsGenerated));
     snk->setName(_prefix + "snk" + to_string(_flowsGenerated));
+    if(_logfile) {
+        _logfile->writeName(src->id, src->str());
+        _logfile->writeName(snk->id, snk->str());
+    }
     src->_node_id = src_node;
     snk->_node_id = dst_node;
 

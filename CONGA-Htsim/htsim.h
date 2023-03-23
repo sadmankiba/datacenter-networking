@@ -33,7 +33,7 @@
 #define ENABLE_ECN 1          // ECN enabled on queues or not
 
 /* Units */
-typedef uint64_t simtime_picosec;
+typedef uint64_t simtime_picosec;      // 1ps = 10^-12 sec
 typedef uint64_t linkspeed_bps;
 typedef uint64_t mem_b;     /* Size in bytes */
 typedef uint32_t addr_t;

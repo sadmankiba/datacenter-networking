@@ -46,8 +46,8 @@ class DataSource : public EventSource, public PacketSink
         simtime_picosec _start_time;
         simtime_picosec _deadline;
 
-        uint64_t _packets_sent;
-        uint64_t _highest_sent;
+        uint64_t _packets_sent;     // (bytes) includes counting retransmitted packets
+        uint64_t _highest_sent;     // (bytes) highest seq num sent
         uint64_t _last_acked;
 
         bool _enable_deadline;

@@ -177,7 +177,7 @@ TcpSrc::receivePacket(Packet &pkt)
     }
 
     // Update rtt and update _rto.
-    uint64_t m = current_ts - ts;
+    uint64_t m = current_ts - ts;   // total trip time for the packet acked and the ack packet
 
     if (m > 0) {
         if (_rtt > 0) {
@@ -457,6 +457,10 @@ TcpSrc::retransmitPacket(int reason)
 
 TcpSink::TcpSink() : DataSink() {}
 
+/*
+ * Update ordered pkts received and buffer received pkt if necessary.
+ * Send ack packet. Set ack timestamp same as received pkt timestamp.
+ */
 void
 TcpSink::receivePacket(Packet &pkt)
 {

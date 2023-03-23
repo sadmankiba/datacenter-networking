@@ -31,9 +31,9 @@ simp_single_link(const ArgList &args, Logfile &logfile)
     QueueLoggerSimple *ql = new QueueLoggerSimple();
     ql->setLogfile(logfile);
     Queue *qfwd = new Queue(1000000000, 10000, ql);
-    qfwd->setName("qfwd");
-    Queue *qbck = new Queue(1000000000, 4000, nullptr);
-    qbck->setName("qbck");
+    qfwd->setName("linkQfwd");
+    Queue *qbck = new Queue(1000000000, 4000, ql);
+    qbck->setName("linkQbck");
 
     logfile.writeName(qfwd->id, qfwd->str());
     logfile.writeName(qbck->id, qfwd->str());
@@ -57,6 +57,7 @@ simp_single_link(const ArgList &args, Logfile &logfile)
     fg->setEndhostQueue(2000000000, 1000000);
     fg->setTrafficLogger(_pktlogger);
     fg->setTcpLogger(_tcplogger);
+    fg->setLogFile(&logfile);
     fg->setTimeLimits(0, timeFromUs(200) - 1);
 
     EventList::Get().setEndtime(timeFromUs(200));
