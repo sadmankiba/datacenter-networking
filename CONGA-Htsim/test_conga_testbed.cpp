@@ -13,8 +13,8 @@
 namespace conga {
 
     // tesdbed configuration
-    const int N_CORE = 12;
-    const int N_LEAF = 24;
+    const int N_CORE = CoreQueue::N_CORE; // 12
+    const int N_LEAF = ToR::N_TOR; // 24
     const int N_SERVER = 32;   // Per leaf
 
     const uint64_t LEAF_BUFFER = 512000;
@@ -24,20 +24,19 @@ namespace conga {
     const uint64_t LEAF_SPEED = 10000000000; // 10gbps
     const uint64_t CORE_SPEED = 40000000000; // 40gbps
 
-    Queue *qServerToR[2];
-    Pipe *pServerToR[2];
+    Queue *qServerToR[N_LEAF];
+    Pipe *pServerToR[N_LEAF];
 
-    Queue *qToRServer[2];
-    Pipe *pToRServer[2];
+    Queue *qToRServer[N_LEAF];
+    Pipe *pToRServer[N_LEAF];
     
-    Queue *qToRCore[2];
-    Pipe *pToRCore[2];
+    Queue *qToRCore[N_LEAF];
+    Pipe *pToRCore[N_LEAF];
 
-    Queue *qCoreToR[2];
-    Pipe *pCoreToR[2];
+    CoreQueue *qCoreToR[N_LEAF];
+    Pipe *pCoreToR[N_LEAF];
 
-    ToR *tor[2];
-    CoreRouter *core;
+    ToR *tor[N_LEAF];
 
     route_t rfwd, rrev;
     void routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst);
@@ -49,22 +48,33 @@ using namespace conga;
 void
 conga_testbed(const ArgList &args, Logfile &logfile)
 {
-    vector<Queue **> vQ = {&qServerToR, &qToRServer, &qToRCore, &qCoreToR};
-    for (Queue **Q: vQ)
-        for(int i = 0; i < 2; i++)
-            Q[i] = new Queue(1000000000, 10000, nullptr);
+    vector<Queue *> vQ{qServerToR, qToRServer, qToRCore, qCoreToR};
+    vector<string> nameV{"qServerToR", "qToRServer", "qToRCore", "qCoreToR"};
 
-    vector<Pipe **> vP = {&pServerToR, &pToRServer, &pToRCore, &pCoreToR};
-    for (Pipe **P: vP)
-        for(int i = 0; i < 2; i++)
-            P[i] = new Pipe(timeFromUs(6));
-    
-    for (int i =0; i < 2; i++)
+    for (int j = 0; j < 4; j++) {
+        for(int i = 0; i < N_LEAF; i++) {
+            vQ[j][i] = new Queue(1000000000, 10000, nullptr);
+            vQ[j][i]->setName(nameV[j] + to_string(i));
+            logfile->writeName(vQ[j]->id, vQ[j]->str());
+        }
+    }
+
+    vector<Pipe *> vP{pServerToR, pToRServer, pToRCore, pCoreToR};
+    vector<string> nameP{"pServerToR", "pToRServer", "pToRCore", "pCoreToR"};
+
+    for (int j = 0; j < 4; j++) {
+        for(int i = 0; i < N_LEAF; i++) {
+            vP[j][i] = new Pipe(timeFromUs(6));
+            vP[j][i]->setName(nameP[j] + to_string(i));
+            logfile->writeName(vP[j]->id, vP[j]->str());
+        }
+    }
+
+    for (int i =0; i < N_LEAF; i++) {
         tor[i] = new ToR();
-    
-    core = new CoreRouter();
-
-    
+        tor[i]->setName("ToR" + to_string(i));
+        logfile->writeName(tor[i]->id, tor[i]->str());
+    }
 
     DataSource::EndHost eh = DataSource::TCP;
     linkspeed_bps flowRate = 1000000000; // 1Gb
@@ -84,27 +94,24 @@ void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t 
     rfwd.push_back(qServerToR[src]);
     rfwd.push_back(pServerToR[src]);
     rfwd.push_back(tor[src]);
-    tor[0]->dstToRId = 1;
-    rfwd.push_back(qToRCore[0]);
-    rfwd.push_back(pToRCore[0]);
-    rfwd.push_back(core);
-    rfwd.push_back(qCoreToR[1]);
-    rfwd.push_back(pCoreToR[1]);
-    rfwd.push_back(tor[1]);
-    rfwd.push_back(qToRServer[1]);
-    rfwd.push_back(pToRServer[1]);
+    rfwd.push_back(qToRCore[src]);
+    rfwd.push_back(pToRCore[src]);
+    rfwd.push_back(qCoreToR[dst]);
+    rfwd.push_back(pCoreToR[dst]);
+    rfwd.push_back(tor[dst]);
+    rfwd.push_back(qToRServer[dst]);
+    rfwd.push_back(pToRServer[dst]);
 
-    rrev.push_back(qServerToR[1]);
-    rrev.push_back(pServerToR[1]);
-    rrev.push_back(tor[1]);
-    rrev.push_back(qToRCore[1]);
-    rrev.push_back(pToRCore[1]);
-    rrev.push_back(core);
-    rrev.push_back(qCoreToR[0]);
-    rrev.push_back(pCoreToR[0]);
-    rrev.push_back(tor[0]);
-    rrev.push_back(qToRServer[0]);
-    rrev.push_back(pToRServer[0]);
+    rrev.push_back(qServerToR[dst]);
+    rrev.push_back(pServerToR[dst]);
+    rrev.push_back(tor[dst]);
+    rrev.push_back(qToRCore[dst]);
+    rrev.push_back(pToRCore[dst]);
+    rrev.push_back(qCoreToR[src]);
+    rrev.push_back(pCoreToR[src]);
+    rrev.push_back(tor[src]);
+    rrev.push_back(qToRServer[src]);
+    rrev.push_back(pToRServer[src]);
 
     fwd = new route_t(rfwd); rev = new route_t(rrev); 
 }

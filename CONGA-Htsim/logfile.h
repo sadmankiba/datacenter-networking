@@ -46,6 +46,7 @@ class Logfile
             std::string val3str, double val3);
         void writeRecord(uint32_t type, uint32_t id, uint32_t ev,
                 double val1, double val2, double val3);
+        void writePktTxt();
 
     private:
         FILE *_trace_file;

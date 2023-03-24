@@ -40,6 +40,13 @@ public:
     virtual ~TrafficLogger(){};
 };
 
+class ToRLog {
+    enum ToREvent {
+        TOR_SRC = 0,
+        TOR_DST = 1
+    }
+}
+
 class QueueLogger
 {
 public:
@@ -60,6 +67,7 @@ public:
     };
 
     virtual void logQueue(Queue &queue, QueueEvent ev, Packet &pkt) = 0;
+    void logPacket(Packet &pkt) { }
     virtual ~QueueLogger(){};
 };
 
