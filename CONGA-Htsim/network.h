@@ -34,7 +34,8 @@ public:
         ECN_REV = 1,
         PP_FIRST = 2,
         DEADLINE = 3, 
-        ACK = 4;
+        ACK = 4,
+        PASSED_CORE = 5
     };
 
     Packet() {};
@@ -57,7 +58,9 @@ public:
 
     inline void setPriority(uint32_t p) {_priority = p;}
     inline uint32_t getPriority() {return _priority;}
-    
+    route_t * getRoute() { return _route; }
+    uint32_t getNextHop() { return _nexthop; }
+ 
     struct vxlan_t vxlan; 
     protected:
     void set(PacketFlow &flow, route_t &route, mem_b pkt_size, packetid_t id);

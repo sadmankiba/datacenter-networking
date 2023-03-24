@@ -10,52 +10,68 @@ Implementation walkthrough
 - First performed congestion information forwarding and receiving in a very simple setup - 1 core router and 2 leaf switches / ToRs.
 
 Added features to implement CONGA in Htsim-
-- `class SrCToR`, `class CoreRouter` and `class DstToR` inherit `class PacketSink`. 
+- Flags in `Packet` class
+```
+class Packet {
+    enum Flags {
+        ...,
+        ACK,
+        PASSED_CORE,
+    }
+}
+```
+- `class ToR` and `class CoreRouter` inherit `class PacketSink`. A `ToR` object acts as src or dst ToR based on packet flag `PASSED_CORE`.
 
 ```
-class ToR: public PacketSink {
-    uint8_t dest_ToR();
-    uint8_t nxtLBTag();
+class ToR: PacketSink 
+    receivePacket(pkt)
+        if packet.flags.PASSED_CORE = true:
+            asSrcToR()
+        else asDstToR()
 
-    vector<uint8_t> vxlan_ip;
-    vector<vector<uint8_t>> LBTagPref;
-}
-
-class SrcToR: public ToR {
-    void receivePacket() {
-        if not pkt.is_ack():
+    asSrcToR() {
+        if pkt is not ack:
             pkt.LBTag = uplink_port
             pkt.CE = 0
         else:
-            dstToRId = dest_ToR(pkt.dst_ip)
-            pkt.vxlan_src = vxlan_ip[ToRId]
-            pkt.vxlan_dst = vxlan_ip[dstToRId]
+            pkt.vxlan.src = idToR
+            pkt.vxlan.dst = dstToRId
             pkt.LBTag = nxtLBTag(dstToRId)
             pkt.CE = CongFromLeaf[dstToRId][pkt.LBTag]
     }
-}
-
-class DstToR: public ToR {
-    void receivePacket() {
+    asDstToR() {
         srcToRId = vxlan_ToR(pkt.vxlan_src)
         if not pkt.is_ack():
             CongFromLeaf[srcToRId][pkt.LBTag] = pkt.CE
         else:
             CongToLeaf[srcToRId][pkt.LBTag] = pkt.CE
     }
-}
 
-class CoreRouter: public PacketSink {
-    void receivePacket() {
+    integer dstToRId
+    integer idToR
+
+class CoreRouter: PacketSink 
+    void receivePacket(pkt) 
         if not pkt.is_ack():
             if link_DRE_congestion[egress_port] > pkt.CE:
                 pkt.CE = link_DRE_congestion[egress_port]
-    }
-}
+        
+        pkt.flags.PASSED_CORE = true
+```
+- Add ToR and core in route
+```
+...
+route.push_back(pServerToR)
+route.push_back(ToR)
+route.push_back(qToRCore)
+route.push_back(pToRCore)
+route.push_back(CoreRouter)
+route.push_back(qCoreToR)
+...
 ```
 
 - Measure congestion at intermediate switches (PacketSinks) for each egress port.
-- Add tunnel header fields in packet.
+
 - Use a congestion matrix to calculate nexthop/path from a switch. Delay/update route for a packet.
 - Return congestion feedback from destination ToR to source ToR.
 
