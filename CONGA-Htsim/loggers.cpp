@@ -7,7 +7,7 @@
 using namespace std;
 
 QueueLoggerSampling::QueueLoggerSampling(simtime_picosec period)
-    : EventSource("QueueLogSampling"),
+    : Logged("QueueLogSampling"), EventSource("QueueLogSampling"),
     _queue(NULL), 
     _lastlook(0), 
     _period(period), 
@@ -128,7 +128,7 @@ QueueLoggerSampling::logQueue(Queue& queue,
 
 
 AggregateTcpLogger::AggregateTcpLogger(simtime_picosec period)
-    : EventSource("bunchofflows"), 
+    : Logged("bunchofflows"), EventSource("bunchofflows"), 
     _period(period)
 {
     EventList::Get().sourceIsPendingRel(*this, period);
@@ -164,7 +164,7 @@ AggregateTcpLogger::doNextEvent()
 
 
 SinkLoggerSampling::SinkLoggerSampling(simtime_picosec period):
-    EventSource("SinkSampling"), 
+    Logged("SinkSampling"), EventSource("SinkSampling"), 
     _period(period)
 {
     EventList::Get().sourceIsPendingRel(*this, 0);

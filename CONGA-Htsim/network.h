@@ -21,12 +21,10 @@ struct vxlan_t {
     uint8_t dst;    // dst ToR id
     uint8_t lbtag;  // core number
     uint8_t ce;     // congestion extent
-}
+};
 
 // See datapacket.h to illustrate how Packet is typically used.
-class Packet
-{
-    friend class PacketFlow;
+class Packet {
 public:
     /* Flag types. */
     enum PacketFlag {
@@ -61,9 +59,9 @@ public:
     route_t * getRoute() { return _route; }
     uint32_t getNextHop() { return _nexthop; }
     void updateRoute(uint32_t hop, PacketSink *pktSink) {
-        _route[hop] = pktSink;
+        (*_route)[hop] = pktSink;
     }
- 
+    std::string dump();
     struct vxlan_t vxlan; 
     protected:
     void set(PacketFlow &flow, route_t &route, mem_b pkt_size, packetid_t id);
@@ -82,7 +80,6 @@ public:
 
 class PacketFlow : public Logged
 {
-    friend class Packet;
     public:
     PacketFlow(TrafficLogger *logger);
     virtual ~PacketFlow() {};

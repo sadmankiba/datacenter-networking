@@ -6,7 +6,7 @@ using namespace std;
 
 StocFairQueue::StocFairQueue(linkspeed_bps bitrate, mem_b maxsize,
         QueueLogger *logger, uint32_t nQueue, uint32_t quantum)
-    : Queue(bitrate, maxsize, logger),
+    : Logged("StocQueue"), Queue(bitrate, maxsize, logger),
       _nQueue(nQueue), _nPackets(0), _quantum(quantum)
 {
     // Create the list of FIFO queues.

@@ -10,7 +10,7 @@ FlowGenerator::FlowGenerator(DataSource::EndHost ehproto,
                              linkspeed_bps flowRate, 
                              uint32_t avgFlowSize, 
                              Workloads::FlowDist flowSizeDist)
-    : EventSource("FlowGen"),
+    : Logged("FlowGen"), EventSource("FlowGen"),
     _prefix(""),
     _ehproto(ehproto),
     _routeGen(rg),

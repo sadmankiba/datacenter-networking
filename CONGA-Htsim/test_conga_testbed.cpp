@@ -57,47 +57,49 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     QueueLoggerSimple *qlogger = new QueueLoggerSimple();
     qlogger->setLogfile(logfile);
     for (int i = 0; i < N_CORE; i++) {    
-        for (int j = 0; j < N_LEAF; j++)
-            qToRCore[i][j] = new Queue(4000000000, 12000, qlogger);
-            qCoreToR[i][j] = new Queue(8000000000, 18000, qlogger);
+        for (int j = 0; j < N_LEAF; j++) {
+            qToRCore[i][j] = new CoreQueue(4000000000, 12000, qlogger);
+            qCoreToR[i][j] = new CoreQueue(8000000000, 18000, qlogger);
 
             pToRCore[i][j] = new Pipe(timeFromUs(9));
             pCoreToR[i][j] = new Pipe(timeFromUs(10));
 
-            qToRCore[i][j]->setName("qToRCore" + i + "," + j);
-            logfile->writeName(qToRCore[i][j]->id, qToRCore[i][j]->str());
-            qCoreToR[i][j]->setName("qCoreToR" + i + "," + j);
-            logfile->writeName(qCoreToR[i][j]->id, qCoreToR[i][j]->str());
+            qToRCore[i][j]->setName("qToRCore" + to_string(i) + "," + to_string(j));
+            logfile.writeName(qToRCore[i][j]->id, qToRCore[i][j]->str());
+            qCoreToR[i][j]->setName("qCoreToR" + to_string(i) + "," + to_string(j));
+            logfile.writeName(qCoreToR[i][j]->id, qCoreToR[i][j]->str());
 
-            pToRCore[i][j]->setName("pToRCore" + i + "," + j);
-            logfile->writeName(pToRCore[i][j]->id, pToRCore[i][j]->str());
-            pCoreToR[i][j]->setName("pCoreToR" + i + "," + j);
-            logfile->writeName(pCoreToR[i][j]->id, pCoreToR[i][j]->str());
+            pToRCore[i][j]->setName("pToRCore" + to_string(i) + "," + to_string(j));
+            logfile.writeName(pToRCore[i][j]->id, pToRCore[i][j]->str());
+            pCoreToR[i][j]->setName("pCoreToR" + to_string(i) + "," + to_string(j));
+            logfile.writeName(pCoreToR[i][j]->id, pCoreToR[i][j]->str());
+        }
     }
 
     for (int i = 0; i < N_LEAF; i++) {    
-        for (int j = 0; j < N_SERVER; j++)
+        for (int j = 0; j < N_SERVER; j++) {
             qServerToR[i][j] = new Queue(1000000000, 16000, qlogger);
             qToRServer[i][j] = new Queue(2000000000, 10000, qlogger);
 
             pServerToR[i][j] = new Pipe(timeFromUs(6));
             pToRServer[i][j] = new Pipe(timeFromUs(7));
 
-            qServerToR[i][j]->setName("qServerToR" + i + "," + j);
-            logfile->writeName(qServerToR[i][j]->id, qServerToR[i][j]->str());
-            qToRServer[i][j]->setName("qToRServer" + i + "," + j);
-            logfile->writeName(qToRServer[i][j]->id, qToRServer[i][j]->str());
+            qServerToR[i][j]->setName("qServerToR" + to_string(i) + "," + to_string(j));
+            logfile.writeName(qServerToR[i][j]->id, qServerToR[i][j]->str());
+            qToRServer[i][j]->setName("qToRServer" + to_string(i) + "," + to_string(j));
+            logfile.writeName(qToRServer[i][j]->id, qToRServer[i][j]->str());
 
-            pServerToR[i][j]->setName("pServerToR" + i + "," + j);
-            logfile->writeName(pServerToR[i][j]->id, pServerToR[i][j]->str());
-            pToRServer[i][j]->setName("pToRServer" + i + "," + j);
-            logfile->writeName(pToRServer[i][j]->id, pToRServer[i][j]->str());
+            pServerToR[i][j]->setName("pServerToR" + to_string(i) + "," + to_string(j));
+            logfile.writeName(pServerToR[i][j]->id, pServerToR[i][j]->str());
+            pToRServer[i][j]->setName("pToRServer" + to_string(i) + "," + to_string(j));
+            logfile.writeName(pToRServer[i][j]->id, pToRServer[i][j]->str());
+        }
     }
     
     for (int i =0; i < N_LEAF; i++) {
         tor[i] = new ToR();
         tor[i]->setName("ToR" + to_string(i));
-        logfile->writeName(tor[i]->id, tor[i]->str());
+        logfile.writeName(tor[i]->id, tor[i]->str());
     }
 
     DataSource::EndHost eh = DataSource::TCP;

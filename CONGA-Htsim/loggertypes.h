@@ -18,6 +18,7 @@ class Logger
     friend class Logfile;
 public:
     void setLogfile(Logfile &logfile) { _logfile = &logfile; }
+    void logTxt(std::string txt) {if (_logfile)  _logfile->writeTxt(txt); }
 protected:
     Logfile *_logfile;
 };
@@ -33,21 +34,16 @@ public:
         PKT_DEPART     = 1,
         PKT_CREATESEND = 2,
         PKT_DROP       = 3,
-        PKT_RCVDESTROY = 4
+        PKT_RCVDESTROY = 4,
+        PKT_TOR_SRC    = 5,
+        PKT_TOR_DST    = 6
     };
 
     virtual void logTraffic(Packet &pkt, Logged &location, TrafficEvent ev) = 0;
     virtual ~TrafficLogger(){};
 };
 
-class ToRLog {
-    enum ToREvent {
-        TOR_SRC = 0,
-        TOR_DST = 1
-    }
-}
-
-class QueueLogger
+class QueueLogger: public Logger
 {
 public:
     enum EventType {
@@ -67,7 +63,6 @@ public:
     };
 
     virtual void logQueue(Queue &queue, QueueEvent ev, Packet &pkt) = 0;
-    void logPacket(Packet &pkt) { }
     virtual ~QueueLogger(){};
 };
 

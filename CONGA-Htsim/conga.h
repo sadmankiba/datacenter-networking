@@ -7,76 +7,24 @@
 
 using namespace std;
 
+class CoreQueue;
+class ToR;
 namespace congaRoute {
     void updateRoute(Packet *pkt, uint8_t core);
 }
 
 class ToR: public PacketSink {
 public:
-    ToR() {
-        idTor = TOR_ADDED;
-        ToR::TOR_ADDED++;
-        for(int i = 0; i < N_TOR; i++)
-            nxtLbTag.push_back(0);
-        
-        vector<uint8_t> v;
-        for (uint8_t i = 0; i < ToR::N_TOR; i++) {
-            v.clear();
-            for (uint8_t j = 0; j < CoreQueue::N_CORE; j++) {
-                v.push_back(0); 
-            }
-            CongFromLeaf[i] = v;
-            CongToLeaf[i] = v;
-        }
-    }
-    void receivePacket(Packet &pkt) {
-        if (packet.getFlag(Packet::PASSED_CORE) == 0) {
-            asSrcToR(pkt)
-        } else asDstToR(pkt)
-    }
+    ToR();
+    void receivePacket(Packet &pkt);
 
-    void asSrcToR(Packet &pkt) {
-        pkt.flow().logTraffic(pkt, *this, ToRLog::TOR_SRC);
-        /* pkt.route = ... - dstToR - pServerToR - qServerToR - tcpSink */
-        uint8_t dstToRId = ((ToR) (*(pkt.getRoute())[pkt.getRoute()->size() - 4])).idTor;
-        if (pkt.getFlag(Packet::ACK) == 0) {
-            pkt.vxlan.src = idTor;
-            pkt.vxlan.dst = dstToRId;
-            pkt.vxlan.lbtag = minCongestedCore(dstToRId);
-            pkt.vxlan.ce = 0; 
-        } else {
-            pkt.vxlan.src = idTor;
-            pkt.vxlan.dst = dstToRId;
-            pkt.vxlan.lbtag = nxtLbTag[dstToRId];
-            pkt.vxlan.ce = CongFromLeaf[dstToRId][pkt.vxlan.lbtag];
-            updateNxtLbTab(dstToRId);
-        }
-    }
+    void asSrcToR(Packet &pkt);
 
-    void asDstToR(Packet &pkt) {
-        pkt.flow().logTraffic(pkt, *this, ToRLog::TOR_DST);
-        if(pkt.getFlag(Packet::ACK) == 0) {
-            CongFromLeaf[pkt.vxlan.src][pkt.vxlan.lbtag] = pkt.vxlan.ce;
-        } else {
-            CongToLeaf[pkt.vxlan.src][pkt.vxlan.lbtag] = pkt.vxlan.ce;
-        }
-    }
+    void asDstToR(Packet &pkt);
 
-    uint8_t minCongestedCore(uint8_t dstToR) {
-        uint8_t minCore = 0;
-        uint8_t minCg = CongToLeaf[dstToR][0];
-        for (uint8_t i = 1; i < CoreQueue::N_CORE; i++) {
-            if (CongToLeaf[dstToR][i] < minCg) {
-                minCore = i;
-                minCg = CongToLeaf[dstToR][i];
-            } 
-        }
-        return minCore;
-    }
+    uint8_t minCongestedCore(uint8_t dstToR);
 
-    void updateNxtLbTag(uint8_t dstToR) {
-        nxtLbTag[dstToR] = (nxtLbTag[dstToR] + 1) % CoreQueue::N_CORE;
-    }
+    void updateNxtLbTag(uint8_t dstToR);
 
     uint8_t idTor;
     const static uint8_t N_TOR = 2;
@@ -85,19 +33,19 @@ private:
     vector<vector<uint8_t>> CongFromLeaf;
     vector<vector<uint8_t>> CongToLeaf;
     static uint8_t TOR_ADDED;
-}
+};
 
 class CoreQueue: public Queue {
 public:
     CoreQueue(linkspeed_bps bitrate, mem_b maxsize, QueueLogger *logger):
-        Queue(bitrate, maxsize, logger) { 
+        Logged("CoreQueue"), Queue(bitrate, maxsize, logger) { 
         for(uint8_t i = 0; i < ToR::N_TOR; i++) {
             regCong.push_back(0);
         }
     }
 
     void receivePacket(Packet &pkt) {
-        uint8_t egPort = ((ToR) (*(pkt.getRoute())[pkt.getNextHop()])).idToR;
+        uint8_t egPort = ((ToR *) ((*(pkt.getRoute()))[pkt.getNextHop()]))->idTor;
             
         if (pkt.getFlag(Packet::ACK) == 0) {
             if (regCong[egPort] > pkt.vxlan.ce) {
@@ -107,7 +55,7 @@ public:
         updateRegCong(egPort);
         pkt.setFlag(Packet::PASSED_CORE);
         if (_logger)
-            _logger.logPacket(pkt);
+            _logger->logTxt(pkt.dump());
         Queue::receivePacket(pkt);
     }
 
@@ -120,7 +68,7 @@ private:
             regCong[egPort] = regCong[egPort] * 7 / 8 + (_queuesize * 1.0 / _maxsize) * 1 / 8;
         }
     }
-    vector<double> regCong(ToR::N_TOR);
-}
+    vector<double> regCong;
+};
 
 #endif 

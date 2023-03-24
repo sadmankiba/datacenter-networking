@@ -6,7 +6,7 @@ using namespace std;
 
 AprxFairQueue::AprxFairQueue(linkspeed_bps bitrate, mem_b maxsize,
         QueueLogger *logger, struct AFQcfg config)
-    : Queue(bitrate, maxsize, logger)
+    :  Logged("AFQueue"), Queue(bitrate, maxsize, logger)
 {
     // Save the AFQ config parameters.
     _cfg = config;

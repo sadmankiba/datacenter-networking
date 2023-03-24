@@ -7,7 +7,6 @@
 #include "eventlist.h"
 #include "logfile.h"
 #include "loggertypes.h"
-#include "network.h"
 #include "queue.h"
 #include "tcp.h"
 #include "prof.h"
@@ -15,17 +14,13 @@
 #include <vector>
 #include <unordered_map>
 
-class QueueLoggerSimple : public Logger, public QueueLogger
+class QueueLoggerSimple : public QueueLogger
 {
     public:
         void logQueue(Queue& queue, QueueLogger::QueueEvent ev, Packet& pkt)
         {
             _logfile->writeRecordWithTxt(QueueLogger::QUEUE_EVENT, queue.id, _queueEvMap[ev], ev,
                     "queuesize", (double)queue._queuesize, "flow id", pkt.flow().id, "pkt id", pkt.id());
-        }
-
-        void logPacket(Packet &pkt){
-            _logfile->writePktTxt(pkt);
         }
     private:
         std::unordered_map<uint8_t, std::string> _queueEvMap = {{0, "PKT_ENQUEUE"}, {1, "PKT_DROP"}, {2, "PKT_SERVICE"}};
@@ -69,7 +64,7 @@ class TcpLoggerSimple : public TcpLogger
         {7, "TCP_TIMEOUT"}};
 };
 
-class QueueLoggerSampling : public Logger, public QueueLogger, public EventSource
+class QueueLoggerSampling : public QueueLogger, public EventSource
 {
     public:
         QueueLoggerSampling(simtime_picosec period);

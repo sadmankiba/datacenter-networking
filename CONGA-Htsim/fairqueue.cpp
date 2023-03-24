@@ -5,7 +5,7 @@
 using namespace std;
 
 FairQueue::FairQueue(linkspeed_bps bitrate, mem_b maxsize, QueueLogger *logger)
-    : Queue(bitrate, maxsize, logger), _roundUpdate(0),
+    : Logged("FairQueue"), Queue(bitrate, maxsize, logger), _roundUpdate(0),
       _nActiveFlows(0), _roundNumber(0), _exactRoundNumber(0.0)
 {
     _mode = LAZY;

@@ -7,7 +7,7 @@ using namespace std;
 
 TimelySrc::TimelySrc(TrafficLogger *pktlogger,
         uint64_t flowsize, simtime_picosec duration)
-    : DataSource(pktlogger, flowsize, duration),
+    : Logged("TimelySrc"), DataSource(pktlogger, flowsize, duration),
       _state(IDLE),
       _recover_seq(0),
       _dupacks(0),
@@ -355,7 +355,7 @@ TimelySrc::retransmitPacket(simtime_picosec current_ts)
 }
 
 
-TimelySink::TimelySink() : DataSink() {}
+TimelySink::TimelySink() : Logged("TimelySink"), DataSink() {}
 
 void
 TimelySink::receivePacket(Packet& pkt)

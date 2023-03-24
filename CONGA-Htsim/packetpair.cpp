@@ -7,7 +7,7 @@ using namespace std;
 
 PacketPairSrc::PacketPairSrc(TrafficLogger *pktlogger,
         uint64_t flowsize, simtime_picosec duration)
-    : DataSource(pktlogger, flowsize, duration),
+    : Logged("PacketPairSrc"), DataSource(pktlogger, flowsize, duration),
       _state(IDLE),
       _recover_seq(0),
       _dupacks(0),
@@ -435,7 +435,7 @@ PacketPairSrc::retransmitPacket(simtime_picosec current_ts)
 
 
 PacketPairSink::PacketPairSink()
-    : DataSink(),
+    : Logged("PacketPairSink"), DataSink(),
       _pktpairdiff(0),
       _first_pair_ts(0),
       _first_pair_seqno(0)

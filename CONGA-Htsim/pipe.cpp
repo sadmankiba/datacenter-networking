@@ -3,7 +3,7 @@
 using namespace std;
 
 Pipe::Pipe(simtime_picosec delay)
-    : EventSource("pipe"), _delay(delay)
+    : Logged("pipe"), EventSource("pipe"), _delay(delay)
 {}
 
 void

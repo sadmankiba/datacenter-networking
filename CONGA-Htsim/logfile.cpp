@@ -75,14 +75,9 @@ Logfile::writeRecordWithTxt(uint32_t type, uint32_t id, string evstr, uint32_t e
     writeRecord(type, id, ev, val1, val2, val3);
 }
 
-void 
-Logfile::writePktTxt(Packet &pkt) {
-    fprintf(_txt_file, "Packet: ack %d, passed_core %d, id %ld, nxthop %d, vxlan-(src %d dst %d lbtag %d ce %d)", pkt.getFlag(Packet::ACK), pkt.getFlag(Packet::PASSED_CORE), pkt.id(), pkt.getNextHop(), pkt.vxlan.src, pkt.vxlan.dst, pkt.vxlan.lbtag, pkt.vxlan.ce);
-    fprintf(_txt_file, ", route ");
-    route_t route = *(pkt.getRoute());
-    for (PacketSink * sink: route) {
-        fprintf(_txt_file, "%s-", sink->str().c_str());
-    fprintf(_txt_file, "\n");
+void
+Logfile::writeTxt(std::string txt) {
+    fprintf(_txt_file, txt.c_str());
 }
 
 void

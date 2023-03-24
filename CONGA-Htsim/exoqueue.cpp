@@ -1,6 +1,6 @@
 #include "exoqueue.h"
 
-ExoQueue::ExoQueue(double loss_rate) : _loss_rate(loss_rate) {}
+ExoQueue::ExoQueue(double loss_rate) : Logged("ExoQueue"), _loss_rate(loss_rate) {}
 
 void
 ExoQueue::setLossRate(double l)

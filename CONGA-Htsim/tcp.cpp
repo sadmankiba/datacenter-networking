@@ -19,7 +19,7 @@ TcpSrc::TcpSrc(TcpLogger *logger,
                TrafficLogger *pktlogger,
                uint32_t flowsize,
                simtime_picosec duration)
-              :DataSource(pktlogger, flowsize, duration),
+              : Logged("TcpSrc"), DataSource(pktlogger, flowsize, duration),
                _state(IDLE),
                _ssthresh(0xffffffff),
                _cwnd(0),
@@ -455,7 +455,7 @@ TcpSrc::retransmitPacket(int reason)
 }
 
 
-TcpSink::TcpSink() : DataSink() {}
+TcpSink::TcpSink() : Logged("TcpSink"), DataSink() {}
 
 /*
  * Update ordered pkts received and buffer received pkt if necessary.

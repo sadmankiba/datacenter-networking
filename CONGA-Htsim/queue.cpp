@@ -9,7 +9,7 @@ using namespace std;
 Queue::Queue(linkspeed_bps bitrate, 
              mem_b maxsize, 
              QueueLogger* logger)
-             : EventSource("queue"), 
+             : Logged("queue"), EventSource("queue"), 
              _maxsize(maxsize), 
              _queuesize(0),
              _bitrate(bitrate), 

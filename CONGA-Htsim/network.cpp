@@ -3,6 +3,8 @@
  */
 #include "network.h"
 
+using namespace std;
+
 uint32_t Logged::LASTIDNUM = 1;
 
 void
@@ -29,6 +31,20 @@ Packet::sendOn()
     _nexthop++;
 
     nextsink->receivePacket(*this);
+}
+
+std::string Packet::dump() {
+    std::string dumpStr("");
+
+    dumpStr += ("Packet: ack " + to_string(getFlag(Packet::ACK)) + ", passed_core " + to_string(getFlag(Packet::PASSED_CORE)) + ", id " + to_string(id())\
+            + ", nxthop " + to_string(getNextHop()) + ", vxlan-(src " + to_string(vxlan.src)\
+            + " dst " + to_string(vxlan.dst) + " lbtag " + to_string(vxlan.lbtag) + " ce " + to_string(vxlan.ce) + ")");
+    dumpStr += ", route ";
+    route_t route = *(getRoute());
+    for (PacketSink * sink: route) 
+        dumpStr += (sink->str() + "-");
+    dumpStr += "\n";
+    return dumpStr;
 }
 
 PacketFlow::PacketFlow(TrafficLogger *logger)

@@ -5,7 +5,7 @@
 using namespace std;
 
 PriorityQueue::PriorityQueue(linkspeed_bps bitrate, mem_b maxsize, QueueLogger *logger)
-    : Queue(bitrate, maxsize, logger)
+    : Logged("PriorityQueue"), Queue(bitrate, maxsize, logger)
 {
 }
 
