@@ -17,10 +17,10 @@ typedef std::vector<route_t*> routes_t;
 typedef uint32_t packetid_t;
 
 struct vxlan_t {
-    uint8_t src;
-    uint8_t dst;
-    uint8_t lbtag;
-    uint8_t ce;
+    uint8_t src;    // src ToR id
+    uint8_t dst;    // dst ToR id
+    uint8_t lbtag;  // core number
+    uint8_t ce;     // congestion extent
 }
 
 // See datapacket.h to illustrate how Packet is typically used.
@@ -60,9 +60,11 @@ public:
     inline uint32_t getPriority() {return _priority;}
     route_t * getRoute() { return _route; }
     uint32_t getNextHop() { return _nexthop; }
+    void updateRoute(uint32_t hop, PacketSink *pktSink) {
+        _route[hop] = pktSink;
+    }
  
     struct vxlan_t vxlan; 
-    route_t *_route;
     protected:
     void set(PacketFlow &flow, route_t &route, mem_b pkt_size, packetid_t id);
 
@@ -71,6 +73,7 @@ public:
     mem_b _size;
     packetid_t _id;
 
+    route_t *_route;
     uint32_t _nexthop; // nexthop index in _route
 
     uint32_t _flags;

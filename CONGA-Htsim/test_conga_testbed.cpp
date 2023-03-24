@@ -25,6 +25,7 @@ namespace conga {
 
     const uint64_t LEAF_SPEED = 10000000000; // 10gbps
     const uint64_t CORE_SPEED = 40000000000; // 40gbps
+    bool ecmp = false;
 
     Queue *qToRCore[N_CORE][N_LEAF];
     Pipe *pToRCore[N_CORE][N_LEAF];
@@ -53,10 +54,12 @@ using namespace conga;
 void
 conga_testbed(const ArgList &args, Logfile &logfile)
 {
+    QueueLoggerSimple *qlogger = new QueueLoggerSimple();
+    qlogger->setLogfile(logfile);
     for (int i = 0; i < N_CORE; i++) {    
         for (int j = 0; j < N_LEAF; j++)
-            qToRCore[i][j] = new Queue(4000000000, 12000, nullptr);
-            qCoreToR[i][j] = new Queue(8000000000, 18000, nullptr);
+            qToRCore[i][j] = new Queue(4000000000, 12000, qlogger);
+            qCoreToR[i][j] = new Queue(8000000000, 18000, qlogger);
 
             pToRCore[i][j] = new Pipe(timeFromUs(9));
             pCoreToR[i][j] = new Pipe(timeFromUs(10));
@@ -74,8 +77,8 @@ conga_testbed(const ArgList &args, Logfile &logfile)
 
     for (int i = 0; i < N_LEAF; i++) {    
         for (int j = 0; j < N_SERVER; j++)
-            qServerToR[i][j] = new Queue(1000000000, 16000, nullptr);
-            qToRServer[i][j] = new Queue(2000000000, 10000, nullptr);
+            qServerToR[i][j] = new Queue(1000000000, 16000, qlogger);
+            qToRServer[i][j] = new Queue(2000000000, 10000, qlogger);
 
             pServerToR[i][j] = new Pipe(timeFromUs(6));
             pToRServer[i][j] = new Pipe(timeFromUs(7));
@@ -120,23 +123,23 @@ void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t 
     // 4 link testbed
     rfwd.push_back(qServerToR[srcToR][sInRack]);
     rfwd.push_back(pServerToR[src][sInRack]);
-    rfwd.push_back(tor[srcToR]);
+    if (!ecmp) rfwd.push_back(tor[srcToR]);
     rfwd.push_back(qToRCore[core][srcToR]);
     rfwd.push_back(pToRCore[core][srcToR]);
     rfwd.push_back(qCoreToR[core][dstToR]);
     rfwd.push_back(pCoreToR[core][dstToR]);
-    rfwd.push_back(tor[dstToR]);
+    if (!ecmp) rfwd.push_back(tor[dstToR]);
     rfwd.push_back(qToRServer[dstToR][dInRack]);
     rfwd.push_back(pToRServer[dstToR][dInRack]);
 
     rrev.push_back(qServerToR[dstToR][dInRack]);
     rrev.push_back(pServerToR[dstToR][dInRack]);
-    rrev.push_back(tor[dstToR]);
+    if (!ecmp) rrev.push_back(tor[dstToR]);
     rrev.push_back(qToRCore[core][dstToR]);
     rrev.push_back(pToRCore[core][dstToR]);
     rrev.push_back(qCoreToR[core][srcToR]);
     rrev.push_back(pCoreToR[core][srcToR]);
-    rrev.push_back(tor[srcToR]);
+    if (!ecmp) rrev.push_back(tor[srcToR]);
     rrev.push_back(qToRServer[srcToR][sInRack]);
     rrev.push_back(pToRServer[srcToR][sInRack]);
 
@@ -144,6 +147,8 @@ void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t 
 }
 
 void congaRoute::updateRoute(Packet *pkt, uint8_t core) {
-    
-    pkt->_route[pkt->getNextHop()];
+    pkt->updateRoute(pkt->getNextHop(), qToRCore[core][pkt->vxlan.src]);
+    pkt->updateRoute(pkt->getNextHop() + 1, pToRCore[core][pkt->vxlan.src]);
+    pkt->updateRoute(pkt->getNextHop() + 2, qCoreToR[core][pkt->vxlan.dst]);
+    pkt->updateRoute(pkt->getNextHop() + 3, pCoreToR[core][pkt->vxlan.dst]);
 }

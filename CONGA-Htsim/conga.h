@@ -16,7 +16,7 @@ public:
     ToR() {
         idTor = TOR_ADDED;
         ToR::TOR_ADDED++;
-        for(int i = 0; i < 256; i++)
+        for(int i = 0; i < N_TOR; i++)
             nxtLbTag.push_back(0);
         
         vector<uint8_t> v;
@@ -37,16 +37,19 @@ public:
 
     void asSrcToR(Packet &pkt) {
         pkt.flow().logTraffic(pkt, *this, ToRLog::TOR_SRC);
-
+        /* pkt.route = ... - dstToR - pServerToR - qServerToR - tcpSink */
+        uint8_t dstToRId = ((ToR) (*(pkt.getRoute())[pkt.getRoute()->size() - 4])).idTor;
         if (pkt.getFlag(Packet::ACK) == 0) {
-            pkt.vxlan.lbtag = 0; // uplink_port, set from route or less cong
+            pkt.vxlan.src = idTor;
+            pkt.vxlan.dst = dstToRId;
+            pkt.vxlan.lbtag = minCongestedCore(dstToRId);
             pkt.vxlan.ce = 0; 
         } else {
-            uint8_t dstToRId = ((ToR) (*(pkt.getRoute())[pkt.getRoute()->size() - 4])).idTor;
             pkt.vxlan.src = idTor;
             pkt.vxlan.dst = dstToRId;
             pkt.vxlan.lbtag = nxtLbTag[dstToRId];
             pkt.vxlan.ce = CongFromLeaf[dstToRId][pkt.vxlan.lbtag];
+            updateNxtLbTab(dstToRId);
         }
     }
 
@@ -57,6 +60,22 @@ public:
         } else {
             CongToLeaf[pkt.vxlan.src][pkt.vxlan.lbtag] = pkt.vxlan.ce;
         }
+    }
+
+    uint8_t minCongestedCore(uint8_t dstToR) {
+        uint8_t minCore = 0;
+        uint8_t minCg = CongToLeaf[dstToR][0];
+        for (uint8_t i = 1; i < CoreQueue::N_CORE; i++) {
+            if (CongToLeaf[dstToR][i] < minCg) {
+                minCore = i;
+                minCg = CongToLeaf[dstToR][i];
+            } 
+        }
+        return minCore;
+    }
+
+    void updateNxtLbTag(uint8_t dstToR) {
+        nxtLbTag[dstToR] = (nxtLbTag[dstToR] + 1) % CoreQueue::N_CORE;
     }
 
     uint8_t idTor;
