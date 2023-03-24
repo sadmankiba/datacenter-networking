@@ -7,7 +7,7 @@
 
 using namespace std;
 
-class ToR: public PacketSink, public Logged {
+class ToR: public PacketSink {
 public:
     ToR() {
         idTor = TOR_ADDED;
@@ -84,7 +84,7 @@ public:
         updateRegCong(egPort);
         pkt.setFlag(Packet::PASSED_CORE);
         if (_logger)
-            _logger.logPkt(pkt);
+            _logger.logPacket(pkt);
         Queue::receivePacket(pkt);
     }
 

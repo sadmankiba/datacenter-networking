@@ -11,7 +11,7 @@
 #include <string>
 #include <unordered_map>
 
-class EventSource : public Logged
+class EventSource : virtual public Logged
 {
     public:
         EventSource(const std::string &name) : Logged(name) {};

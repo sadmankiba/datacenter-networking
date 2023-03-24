@@ -24,8 +24,8 @@ class QueueLoggerSimple : public Logger, public QueueLogger
                     "queuesize", (double)queue._queuesize, "flow id", pkt.flow().id, "pkt id", pkt.id());
         }
 
-        void logPacket(Packet &pkt) {
-            _logfile->writePktTxt();
+        void logPacket(Packet &pkt){
+            _logfile->writePktTxt(pkt);
         }
     private:
         std::unordered_map<uint8_t, std::string> _queueEvMap = {{0, "PKT_ENQUEUE"}, {1, "PKT_DROP"}, {2, "PKT_SERVICE"}};

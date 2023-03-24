@@ -91,7 +91,7 @@ class PacketFlow : public Logged
     TrafficLogger *_logger;
 };
 
-class PacketSink
+class PacketSink: virtual public Logged
 {
     public:
         PacketSink() {}

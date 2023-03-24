@@ -16,7 +16,7 @@ class DataSource;
  * Does not drop packet and reply ACK packets. 
  * Does not generate any log.
  */
-class DataSink : public PacketSink, public Logged
+class DataSink : public PacketSink
 {
     public:
         DataSink();
