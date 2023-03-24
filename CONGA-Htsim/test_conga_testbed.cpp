@@ -54,6 +54,7 @@ using namespace conga;
 void
 conga_testbed(const ArgList &args, Logfile &logfile)
 {
+    srand(time(NULL));
     QueueLoggerSimple *qlogger = new QueueLoggerSimple();
     qlogger->setLogfile(logfile);
     for (int i = 0; i < N_CORE; i++) {    
@@ -96,17 +97,24 @@ conga_testbed(const ArgList &args, Logfile &logfile)
         }
     }
     
+    Logger *logger = new Logger();
+    logger->setLogfile(logfile);
     for (int i =0; i < N_LEAF; i++) {
-        tor[i] = new ToR();
+        tor[i] = new ToR(logger);
         tor[i]->setName("ToR" + to_string(i));
         logfile.writeName(tor[i]->id, tor[i]->str());
     }
 
     DataSource::EndHost eh = DataSource::TCP;
-    linkspeed_bps flowRate = 1000000000; // 1Gb
+    linkspeed_bps flowRate = 5000000000; // 5Gb
     uint32_t avgFlowSize = MSS_BYTES * 10;
     Workloads::FlowDist flowSizeDist = Workloads::UNIFORM;
     FlowGenerator *fg = new FlowGenerator(eh, routeGenerate, flowRate, avgFlowSize, flowSizeDist);
+    
+    TrafficLoggerSimple *_pktlogger = new TrafficLoggerSimple();
+    _pktlogger->setLogfile(logfile);
+    fg->setTrafficLogger(_pktlogger);
+    fg->setLogFile(&logfile);
 
     fg->setTimeLimits(0, timeFromUs(4000) - 1);
 
@@ -120,7 +128,6 @@ void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t 
     uint8_t dstToR = dst / N_SERVER;
     uint8_t sInRack = src % N_SERVER;
     uint8_t dInRack = dst % N_SERVER;
-    srand(time(NULL));
     uint8_t core = (simpleHash(src, rand())) % N_CORE; // ECMP-like
     // 4 link testbed
     rfwd.push_back(qServerToR[srcToR][sInRack]);

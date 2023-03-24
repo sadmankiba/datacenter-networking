@@ -186,6 +186,8 @@ FlowGenerator::createFlow(uint64_t flowSize,
                      // TODO: option to supply logtcp.
                      if (_pktlogger && _tcplogger) {
                         src = new TcpSrc(_tcplogger, _pktlogger, flowSize);
+                     } else if (_pktlogger) {
+                        src = new TcpSrc(nullptr, _pktlogger, flowSize);
                      } else {
                         src = new TcpSrc(NULL, NULL, flowSize);
                      }

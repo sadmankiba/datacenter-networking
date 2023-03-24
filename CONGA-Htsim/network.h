@@ -21,6 +21,8 @@ struct vxlan_t {
     uint8_t dst;    // dst ToR id
     uint8_t lbtag;  // core number
     uint8_t ce;     // congestion extent
+    uint8_t fb_lbtag; // feedback core number
+    uint8_t fb_ce;  // feedback ce
 };
 
 // See datapacket.h to illustrate how Packet is typically used.

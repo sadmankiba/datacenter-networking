@@ -15,16 +15,13 @@ namespace congaRoute {
 
 class ToR: public PacketSink {
 public:
-    ToR();
+    ToR(Logger *logger);
     void receivePacket(Packet &pkt);
-
     void asSrcToR(Packet &pkt);
-
     void asDstToR(Packet &pkt);
-
     uint8_t minCongestedCore(uint8_t dstToR);
-
     void updateNxtLbTag(uint8_t dstToR);
+    std::string congTableDump(bool from);
 
     uint8_t idTor;
     const static uint8_t N_TOR = 2;
@@ -33,6 +30,7 @@ private:
     vector<vector<uint8_t>> CongFromLeaf;
     vector<vector<uint8_t>> CongToLeaf;
     static uint8_t TOR_ADDED;
+    Logger *_logger;
 };
 
 class CoreQueue: public Queue {
@@ -52,15 +50,28 @@ public:
                 pkt.vxlan.ce = (uint8_t) (regCong[egPort] * 8);
             }
         }
-        updateRegCong(egPort);
         pkt.setFlag(Packet::PASSED_CORE);
-        if (_logger)
+        if (_logger) {
             _logger->logTxt(pkt.dump());
+        }
         Queue::receivePacket(pkt);
+        updateRegCong(egPort);
+        if (_logger) {
+            _logger->logTxt(regCongDump());
+        }
     }
 
     const static uint8_t N_CORE = 2;
 private:
+    std::string regCongDump() {
+        std::string d("");
+        d += "regCong: ";
+        for (int i = 0; i < ToR::N_TOR; i++) {
+            d += (to_string(regCong[i]) + " ");
+        }
+        d += "\n";
+        return d;
+    }
     void updateRegCong(uint8_t egPort) {
         if (regCong[egPort] - 0 < 1e-8) 
             regCong[egPort] = _queuesize * 1.0 / _maxsize;
