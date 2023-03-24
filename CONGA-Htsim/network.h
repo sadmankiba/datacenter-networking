@@ -62,11 +62,12 @@ public:
     uint32_t getNextHop() { return _nexthop; }
  
     struct vxlan_t vxlan; 
+    route_t *_route;
     protected:
     void set(PacketFlow &flow, route_t &route, mem_b pkt_size, packetid_t id);
 
     PacketFlow *_flow;
-    route_t *_route;
+    
     mem_b _size;
     packetid_t _id;
 

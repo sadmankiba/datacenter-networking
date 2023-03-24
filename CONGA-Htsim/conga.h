@@ -7,6 +7,10 @@
 
 using namespace std;
 
+namespace congaRoute {
+    void updateRoute(Packet *pkt, uint8_t core);
+}
+
 class ToR: public PacketSink {
 public:
     ToR() {
@@ -88,7 +92,7 @@ public:
         Queue::receivePacket(pkt);
     }
 
-    const static uint8_t N_CORE = 1;
+    const static uint8_t N_CORE = 2;
 private:
     void updateRegCong(uint8_t egPort) {
         if (regCong[egPort] - 0 < 1e-8) 

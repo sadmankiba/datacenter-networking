@@ -1,3 +1,3 @@
 #include "conga.h"
 
-uint8_t ToR::NUMTOR = 0;
+uint8_t ToR::TOR_ADDED = 0;
