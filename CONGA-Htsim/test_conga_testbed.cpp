@@ -43,7 +43,6 @@ namespace conga {
         
     ToR *tor[N_LEAF];
 
-    route_t rfwd, rrev;
     void routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst);
     uint8_t simpleHash(uint32_t val1, uint32_t val2) {
         return (val1 + val2) % 256; 
@@ -63,6 +62,8 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     double tms = 10;
     uint32_t fsKb = 15;
     uint32_t wl = 0;
+    uint32_t maxflow = -1;
+    double offRt = 0;
 
     parseInt(args, "ecmp", ecmp);
     parseInt(args, "log", doLog);
@@ -70,6 +71,8 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     parseDouble(args, "tms", tms);
     parseInt(args, "fs", fsKb);
     parseInt(args, "wl", wl);
+    parseInt(args, "mf", maxflow);
+    parseDouble(args, "of", offRt);
 
     QueueLoggerSimple *qlogger = nullptr; 
     if (doLog) {
@@ -144,6 +147,7 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     } 
 
     fg->setEndhostQueue(LEAF_SPEED, ENDH_BUFFER);
+    if (maxflow > 0) fg->setReplaceFlow(maxflow, offRt);
     fg->setTrafficLogger(_pktlogger);
     fg->setLogFile(&logfile);
 
@@ -161,7 +165,8 @@ void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t 
     dst = dstToR * N_LEAF + dInRack;
     
     uint8_t core = (simpleHash(src, rand())) % N_CORE; // ECMP-like
-    // 4 link testbed
+    
+    route_t rfwd, rrev;
     rfwd.push_back(qServerToR[srcToR][sInRack]);
     rfwd.push_back(pServerToR[src][sInRack]);
     if (!ecmp) rfwd.push_back(tor[srcToR]);

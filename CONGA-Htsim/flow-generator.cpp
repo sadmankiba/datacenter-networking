@@ -56,6 +56,10 @@ FlowGenerator::setEndhostQueue(linkspeed_bps qRate,
     _endhostQbuffer = qBuffer;
 }
 
+/*
+* maxFlows : max flow in system
+* offRatio = ratio of idle time / flow time. by default 0. 
+*/
 void
 FlowGenerator::setReplaceFlow(uint32_t maxFlows, 
                               double offRatio)
@@ -64,7 +68,7 @@ FlowGenerator::setReplaceFlow(uint32_t maxFlows,
     _maxFlows = maxFlows;
 
     double avgFCT = (_workload._avgFlowSize * 8.0)/(_flowRate/_maxFlows);
-    _avgFlowArrivalTime = timeFromSec(avgFCT)/_maxFlows;
+    _avgFlowArrivalTime = timeFromSec(avgFCT)/_maxFlows; // remains same
 
     _avgOffTime = llround(timeFromSec(avgFCT) * offRatio / (1 + offRatio));
 }
