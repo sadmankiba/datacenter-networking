@@ -86,7 +86,7 @@ class PacketFlow : public Logged
     PacketFlow(TrafficLogger *logger);
     virtual ~PacketFlow() {};
     void logTraffic(Packet &pkt, Logged &location, TrafficLogger::TrafficEvent ev);
-
+    void logTxt(std::string txt) { if(_logger) _logger->logTxt(txt); }
     // How many packets of this flow are alive (on travel).
     uint32_t _nPackets;
 

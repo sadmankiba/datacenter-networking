@@ -25,7 +25,9 @@ namespace conga {
 
     const uint64_t LEAF_SPEED = 10000000000; // 10gbps
     const uint64_t CORE_SPEED = 40000000000; // 40gbps
+    
     bool ecmp = false;
+    bool doLog = false;
 
     Queue *qToRCore[N_CORE][N_LEAF];
     Pipe *pToRCore[N_CORE][N_LEAF];
@@ -55,8 +57,15 @@ void
 conga_testbed(const ArgList &args, Logfile &logfile)
 {
     srand(time(NULL));
-    QueueLoggerSimple *qlogger = new QueueLoggerSimple();
-    qlogger->setLogfile(logfile);
+    if (! args.find("ecmp") == args.end()) ecmp = atoi(args["ecmp"]);
+    if (! args.find("log") == args.end()) doLog = atoi(args["log"]);
+    
+
+    QueueLoggerSimple *qlogger = nullptr; 
+    if (doLog) {
+        qlogger = new QueueLoggerSimple();
+        qlogger->setLogfile(logfile);
+    }
     for (int i = 0; i < N_CORE; i++) {    
         for (int j = 0; j < N_LEAF; j++) {
             qToRCore[i][j] = new Queue(16000000000, 20000, qlogger);
@@ -97,8 +106,11 @@ conga_testbed(const ArgList &args, Logfile &logfile)
         }
     }
     
-    Logger *logger = new Logger();
-    logger->setLogfile(logfile);
+    Logger *logger = nullptr;
+    if (doLog) { 
+        logger = new Logger();
+        logger->setLogfile(logfile);
+    }
     for (int i =0; i < N_LEAF; i++) {
         tor[i] = new ToR(i, logger);
         tor[i]->setName("ToR" + to_string(i));
@@ -111,23 +123,28 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     Workloads::FlowDist flowSizeDist = Workloads::UNIFORM;
     FlowGenerator *fg = new FlowGenerator(eh, routeGenerate, flowRate, avgFlowSize, flowSizeDist);
     
-    TrafficLoggerSimple *_pktlogger = new TrafficLoggerSimple();
-    _pktlogger->setLogfile(logfile);
+    TrafficLoggerSimple *_pktlogger = nullptr;
+    if (doLog) {
+        _pktlogger = new TrafficLoggerSimple();
+        _pktlogger->setLogfile(logfile);
+    } 
+    
     fg->setTrafficLogger(_pktlogger);
     fg->setLogFile(&logfile);
 
-    fg->setTimeLimits(0, timeFromUs(200) - 1);
+    fg->setTimeLimits(0, timeFromUs(10000) - 1);
 
-    EventList::Get().setEndtime(timeFromUs(200));
+    EventList::Get().setEndtime(timeFromUs(10000));
 }
 
 void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {
-    src = 0;
-    dst = 1;
-    uint8_t srcToR = src / N_SERVER;
-    uint8_t dstToR = dst / N_SERVER;
-    uint8_t sInRack = src % N_SERVER;
-    uint8_t dInRack = dst % N_SERVER;
+    uint8_t srcToR = (uint8_t) (rand() % N_LEAF);
+    uint8_t dstToR = ((uint8_t) (srcToR + 1 + rand() % (N_LEAF - 1)) % N_LEAF;
+    uint8_t sInRack = rand() % N_SERVER;
+    uint8_t dInRack = rand() % N_SERVER;
+    src = srcToR * N_LEAF + sInRack;
+    dst = dstToR * N_LEAF + dInRack;
+    
     uint8_t core = (simpleHash(src, rand())) % N_CORE; // ECMP-like
     // 4 link testbed
     rfwd.push_back(qServerToR[srcToR][sInRack]);

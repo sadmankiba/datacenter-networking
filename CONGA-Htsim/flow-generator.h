@@ -61,6 +61,11 @@ class FlowGenerator : public EventSource
             _logfile = logfile;
         }
 
+        void addFct(double fctUs) {
+            _fctSum += fctUs; 
+            _nFlows++;
+        }
+
         /* Used by Source to notify the Generator of flow finishing, which can then
          * (optionally) generate a new flow. */
         void finishFlow(uint32_t flow_id);
@@ -109,6 +114,9 @@ class FlowGenerator : public EventSource
         TrafficLogger *_pktlogger;
         TcpLogger *_tcplogger;
         Logfile *_logfile;
+
+        double _fctSum;
+        uint64_t _nFlows;
 };
 
 #endif /* FLOW_GENERATOR_H */
