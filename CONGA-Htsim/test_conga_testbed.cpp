@@ -32,7 +32,7 @@ namespace conga {
     Queue *qToRCore[N_CORE][N_LEAF];
     Pipe *pToRCore[N_CORE][N_LEAF];
 
-    CoreQueue *qCoreToR[N_CORE][N_LEAF];
+    Queue *qCoreToR[N_CORE][N_LEAF];
     Pipe *pCoreToR[N_CORE][N_LEAF];
 
     Queue *qServerToR[N_LEAF][N_SERVER];
@@ -59,13 +59,17 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     srand(time(NULL));
 
     uint32_t doLog = 0;
-    double load = 0.1;
+    double load = 10;
     double tms = 10;
+    uint32_t fsKb = 15;
+    uint32_t wl = 0;
 
     parseInt(args, "ecmp", ecmp);
     parseInt(args, "log", doLog);
     parseDouble(args, "load", load);
     parseDouble(args, "tms", tms);
+    parseInt(args, "fs", fsKb);
+    parseInt(args, "wl", wl);
 
     QueueLoggerSimple *qlogger = nullptr; 
     if (doLog) {
@@ -75,7 +79,9 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     for (int i = 0; i < N_CORE; i++) {    
         for (int j = 0; j < N_LEAF; j++) {
             qToRCore[i][j] = new Queue(CORE_SPEED, CORE_BUFFER, qlogger);
-            qCoreToR[i][j] = new CoreQueue(i, j, CORE_SPEED, CORE_BUFFER, qlogger);
+            qCoreToR[i][j] = ecmp?
+              new Queue(CORE_SPEED, CORE_BUFFER, qlogger) :
+              new CoreQueue(i, j, CORE_SPEED, CORE_BUFFER, qlogger);
 
             pToRCore[i][j] = new Pipe(timeFromUs(LINK_DELAY));
             pCoreToR[i][j] = new Pipe(timeFromUs(LINK_DELAY));
@@ -124,10 +130,11 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     }
 
     DataSource::EndHost eh = DataSource::TCP;
-    linkspeed_bps flowRate = load * CORE_SPEED * N_CORE * N_LEAF;
+    linkspeed_bps flowRate = load / 100 * CORE_SPEED * N_CORE * N_LEAF;
     flowRate *= (N_CORE * N_LEAF) / (N_CORE * N_LEAF - 1);
-    uint32_t avgFlowSize = MSS_BYTES * 10;
-    Workloads::FlowDist flowSizeDist = Workloads::UNIFORM;
+    uint32_t avgFlowSize = fsKb * 1000;
+    vector<Workloads::FlowDist> v{Workloads::UNIFORM, Workloads::PARETO, Workloads::ENTERPRISE, Workloads::DATAMINING};
+    Workloads::FlowDist flowSizeDist = v[wl];
     FlowGenerator *fg = new FlowGenerator(eh, routeGenerate, flowRate, avgFlowSize, flowSizeDist);
     
     TrafficLoggerSimple *_pktlogger = nullptr;

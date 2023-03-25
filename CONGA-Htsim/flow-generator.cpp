@@ -103,7 +103,7 @@ FlowGenerator::doNextEvent()
 {
     if (EventList::Get().now() == _endTime) {
         dumpLiveFlows();
-        cout << "nFlows: " << _nFlows << " avg fct: " << (_fctSum * 1.0) / _nFlows << endl;
+        cout << _nFlows << ", " << (_fctSum * 1.0) / _nFlows;
         return;
     }
 
@@ -248,7 +248,7 @@ FlowGenerator::finishFlow(uint32_t flow_id)
 void
 FlowGenerator::dumpLiveFlows()
 {
-    cout << endl << "Live Flows: " << _liveFlows.size() << endl;
+    // cout << endl << "Live Flows: " << _liveFlows.size() << endl;
     for (auto flow : _liveFlows) {
         DataSource *src = flow.second;
         // src->printStatus();
