@@ -14,14 +14,15 @@ ToR::ToR(Logger *logger): Logged("ToR"), _logger(logger) {
         for (uint8_t j = 0; j < CoreQueue::N_CORE; j++) {
             v.push_back(0); 
         }
-        CongFromLeaf[i] = v;
-        CongToLeaf[i] = v;
+        CongFromLeaf.push_back(v);
+        CongToLeaf.push_back(v);
     }
 }
 void ToR::receivePacket(Packet &pkt) {
     if (pkt.getFlag(Packet::PASSED_CORE) == 0) {
         asSrcToR(pkt);
     } else asDstToR(pkt);
+    pkt.sendOn();
 }
 
 void ToR::asSrcToR(Packet &pkt) {

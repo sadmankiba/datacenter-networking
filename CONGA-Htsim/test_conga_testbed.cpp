@@ -59,11 +59,11 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     qlogger->setLogfile(logfile);
     for (int i = 0; i < N_CORE; i++) {    
         for (int j = 0; j < N_LEAF; j++) {
-            qToRCore[i][j] = new CoreQueue(4000000000, 12000, qlogger);
-            qCoreToR[i][j] = new CoreQueue(8000000000, 18000, qlogger);
+            qToRCore[i][j] = new CoreQueue(16000000000, 60000, qlogger);
+            qCoreToR[i][j] = new Queue(1200000000, 80000, qlogger);
 
-            pToRCore[i][j] = new Pipe(timeFromUs(9));
-            pCoreToR[i][j] = new Pipe(timeFromUs(10));
+            pToRCore[i][j] = new Pipe(timeFromNs(400));
+            pCoreToR[i][j] = new Pipe(timeFromNs(500));
 
             qToRCore[i][j]->setName("qToRCore" + to_string(i) + "," + to_string(j));
             logfile.writeName(qToRCore[i][j]->id, qToRCore[i][j]->str());
@@ -79,11 +79,11 @@ conga_testbed(const ArgList &args, Logfile &logfile)
 
     for (int i = 0; i < N_LEAF; i++) {    
         for (int j = 0; j < N_SERVER; j++) {
-            qServerToR[i][j] = new Queue(1000000000, 16000, qlogger);
-            qToRServer[i][j] = new Queue(2000000000, 10000, qlogger);
+            qServerToR[i][j] = new Queue(10000000000, 90000, qlogger);
+            qToRServer[i][j] = new Queue(20000000000, 70000, qlogger);
 
-            pServerToR[i][j] = new Pipe(timeFromUs(6));
-            pToRServer[i][j] = new Pipe(timeFromUs(7));
+            pServerToR[i][j] = new Pipe(timeFromNs(600));
+            pToRServer[i][j] = new Pipe(timeFromNs(300));
 
             qServerToR[i][j]->setName("qServerToR" + to_string(i) + "," + to_string(j));
             logfile.writeName(qServerToR[i][j]->id, qServerToR[i][j]->str());
@@ -116,9 +116,9 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     fg->setTrafficLogger(_pktlogger);
     fg->setLogFile(&logfile);
 
-    fg->setTimeLimits(0, timeFromUs(4000) - 1);
+    fg->setTimeLimits(0, timeFromUs(100) - 1);
 
-    EventList::Get().setEndtime(timeFromUs(4000));
+    EventList::Get().setEndtime(timeFromUs(100));
 }
 
 void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {

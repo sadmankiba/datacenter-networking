@@ -77,7 +77,7 @@ Logfile::writeRecordWithTxt(uint32_t type, uint32_t id, string evstr, uint32_t e
 
 void
 Logfile::writeTxt(std::string txt) {
-    fprintf(_txt_file, txt.c_str());
+    fprintf(_txt_file, "%s", txt.c_str());
 }
 
 void

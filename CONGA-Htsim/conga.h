@@ -35,8 +35,9 @@ private:
 
 class CoreQueue: public Queue {
 public:
-    CoreQueue(linkspeed_bps bitrate, mem_b maxsize, QueueLogger *logger):
-        Logged("CoreQueue"), Queue(bitrate, maxsize, logger) { 
+    CoreQueue(uint8_t coreId, uint8_t torId, linkspeed_bps bitrate, mem_b maxsize, QueueLogger *logger):
+        Logged("CoreQueue"), Queue(bitrate, maxsize, logger),
+        _coreId(coreId), _torId(torId) { 
         for(uint8_t i = 0; i < ToR::N_TOR; i++) {
             regCong.push_back(0);
         }
@@ -52,6 +53,7 @@ public:
         }
         pkt.setFlag(Packet::PASSED_CORE);
         if (_logger) {
+            _logger->logTxt("Core " + to_string(_coreId) + "," + to_string(_torId) + ": ");
             _logger->logTxt(pkt.dump());
         }
         Queue::receivePacket(pkt);
@@ -65,21 +67,25 @@ public:
 private:
     std::string regCongDump() {
         std::string d("");
-        d += "regCong: ";
+        d += "queuesize: " + to_string(_queuesize);
+        d += " regCong: ";
         for (int i = 0; i < ToR::N_TOR; i++) {
             d += (to_string(regCong[i]) + " ");
         }
+
         d += "\n";
         return d;
     }
     void updateRegCong(uint8_t egPort) {
-        if (regCong[egPort] - 0 < 1e-8) 
-            regCong[egPort] = _queuesize * 1.0 / _maxsize;
+        if ((regCong[egPort] - 0) < 1e-5) 
+            regCong[egPort] = (_queuesize * 1.0) / _maxsize;
         else {
-            regCong[egPort] = regCong[egPort] * 7 / 8 + (_queuesize * 1.0 / _maxsize) * 1 / 8;
+            regCong[egPort] = (regCong[egPort] * 7.0) / 8 + (_queuesize * 1.0 / _maxsize) * 1 / 8;
         }
     }
     vector<double> regCong;
+    uint8_t _coreId;
+    uint8_t _torId;
 };
 
 #endif 
