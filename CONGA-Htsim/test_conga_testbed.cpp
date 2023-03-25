@@ -25,9 +25,9 @@ namespace conga {
 
     const uint64_t LEAF_SPEED = 10000000000; // 10gbps
     const uint64_t CORE_SPEED = 40000000000; // 40gbps
+    const double LINK_DELAY = 0.1; // 0.1 us
     
-    bool ecmp = false;
-    bool doLog = false;
+    uint32_t ecmp = 0;
 
     Queue *qToRCore[N_CORE][N_LEAF];
     Pipe *pToRCore[N_CORE][N_LEAF];
@@ -57,9 +57,15 @@ void
 conga_testbed(const ArgList &args, Logfile &logfile)
 {
     srand(time(NULL));
-    if (! args.find("ecmp") == args.end()) ecmp = atoi(args["ecmp"]);
-    if (! args.find("log") == args.end()) doLog = atoi(args["log"]);
-    
+
+    uint32_t doLog = 0;
+    double load = 0.1;
+    double tms = 10;
+
+    parseInt(args, "ecmp", ecmp);
+    parseInt(args, "log", doLog);
+    parseDouble(args, "load", load);
+    parseDouble(args, "tms", tms);
 
     QueueLoggerSimple *qlogger = nullptr; 
     if (doLog) {
@@ -68,11 +74,11 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     }
     for (int i = 0; i < N_CORE; i++) {    
         for (int j = 0; j < N_LEAF; j++) {
-            qToRCore[i][j] = new Queue(16000000000, 20000, qlogger);
-            qCoreToR[i][j] = new CoreQueue(i, j, 1200000000, 30000, qlogger);
+            qToRCore[i][j] = new Queue(CORE_SPEED, CORE_BUFFER, qlogger);
+            qCoreToR[i][j] = new CoreQueue(i, j, CORE_SPEED, CORE_BUFFER, qlogger);
 
-            pToRCore[i][j] = new Pipe(timeFromNs(400));
-            pCoreToR[i][j] = new Pipe(timeFromNs(500));
+            pToRCore[i][j] = new Pipe(timeFromUs(LINK_DELAY));
+            pCoreToR[i][j] = new Pipe(timeFromUs(LINK_DELAY));
 
             qToRCore[i][j]->setName("qToRCore" + to_string(i) + "," + to_string(j));
             logfile.writeName(qToRCore[i][j]->id, qToRCore[i][j]->str());
@@ -88,11 +94,11 @@ conga_testbed(const ArgList &args, Logfile &logfile)
 
     for (int i = 0; i < N_LEAF; i++) {    
         for (int j = 0; j < N_SERVER; j++) {
-            qServerToR[i][j] = new Queue(10000000000, 40000, qlogger);
-            qToRServer[i][j] = new Queue(20000000000, 15000, qlogger);
+            qServerToR[i][j] = new Queue(LEAF_SPEED, LEAF_BUFFER, qlogger);
+            qToRServer[i][j] = new Queue(LEAF_SPEED, LEAF_BUFFER, qlogger);
 
-            pServerToR[i][j] = new Pipe(timeFromNs(600));
-            pToRServer[i][j] = new Pipe(timeFromNs(300));
+            pServerToR[i][j] = new Pipe(timeFromUs(LINK_DELAY));
+            pToRServer[i][j] = new Pipe(timeFromUs(LINK_DELAY));
 
             qServerToR[i][j]->setName("qServerToR" + to_string(i) + "," + to_string(j));
             logfile.writeName(qServerToR[i][j]->id, qServerToR[i][j]->str());
@@ -118,7 +124,8 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     }
 
     DataSource::EndHost eh = DataSource::TCP;
-    linkspeed_bps flowRate = 5000000000; // 5Gb
+    linkspeed_bps flowRate = load * CORE_SPEED * N_CORE * N_LEAF;
+    flowRate *= (N_CORE * N_LEAF) / (N_CORE * N_LEAF - 1);
     uint32_t avgFlowSize = MSS_BYTES * 10;
     Workloads::FlowDist flowSizeDist = Workloads::UNIFORM;
     FlowGenerator *fg = new FlowGenerator(eh, routeGenerate, flowRate, avgFlowSize, flowSizeDist);
@@ -128,18 +135,19 @@ conga_testbed(const ArgList &args, Logfile &logfile)
         _pktlogger = new TrafficLoggerSimple();
         _pktlogger->setLogfile(logfile);
     } 
-    
+
+    fg->setEndhostQueue(LEAF_SPEED, ENDH_BUFFER);
     fg->setTrafficLogger(_pktlogger);
     fg->setLogFile(&logfile);
 
-    fg->setTimeLimits(0, timeFromUs(10000) - 1);
+    fg->setTimeLimits(0, timeFromMs(tms) - 1);
 
-    EventList::Get().setEndtime(timeFromUs(10000));
+    EventList::Get().setEndtime(timeFromMs(tms));
 }
 
 void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {
     uint8_t srcToR = (uint8_t) (rand() % N_LEAF);
-    uint8_t dstToR = ((uint8_t) (srcToR + 1 + rand() % (N_LEAF - 1)) % N_LEAF;
+    uint8_t dstToR = (uint8_t) (srcToR + 1 + rand() % (N_LEAF - 1)) % N_LEAF;
     uint8_t sInRack = rand() % N_SERVER;
     uint8_t dInRack = rand() % N_SERVER;
     src = srcToR * N_LEAF + sInRack;

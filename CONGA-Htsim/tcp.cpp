@@ -90,7 +90,7 @@ TcpSrc::doNextEvent()
 
     // Retransmission timeout.
     else if (_RFC2988_RTO_timeout != 0 && current_ts >= _RFC2988_RTO_timeout) {
-
+        /*
         cout << str() << " at " << timeAsMs(current_ts)
              << " RTO " << timeAsUs(_rto)
              << " MDEV " << timeAsUs(_mdev)
@@ -99,7 +99,7 @@ TcpSrc::doNextEvent()
              << " CWND "<< _cwnd / MSS_BYTES
              << " RTO_timeout " << timeAsMs(_RFC2988_RTO_timeout)
              << " STATE " << _state << endl;
-
+        */
         if (_logger) _logger->logTcp(*this, TcpLogger::TCP_TIMEOUT);
 
         if (_state == FAST_RECOV) {
