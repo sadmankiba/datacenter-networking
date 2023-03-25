@@ -5,6 +5,8 @@
 #include "queue.h"
 #include <vector>
 
+#include <math.h>
+
 using namespace std;
 
 class CoreQueue;
@@ -15,7 +17,7 @@ namespace congaRoute {
 
 class ToR: public PacketSink {
 public:
-    ToR(Logger *logger);
+    ToR(uint8_t idTor, Logger *logger);
     void receivePacket(Packet &pkt);
     void asSrcToR(Packet &pkt);
     void asDstToR(Packet &pkt);
@@ -44,11 +46,12 @@ public:
     }
 
     void receivePacket(Packet &pkt) {
-        uint8_t egPort = ((ToR *) ((*(pkt.getRoute()))[pkt.getNextHop()]))->idTor;
+        ToR *tor = dynamic_cast<ToR *> ((*(pkt.getRoute()))[pkt.getNextHop() + 1]);
+        uint8_t egPort = tor->idTor;
             
         if (pkt.getFlag(Packet::ACK) == 0) {
             if (regCong[egPort] > pkt.vxlan.ce) {
-                pkt.vxlan.ce = (uint8_t) (regCong[egPort] * 8);
+                pkt.vxlan.ce = (uint8_t) (regCong[egPort] * pow(2, CoreQueue::CE_BITS));
             }
         }
         pkt.setFlag(Packet::PASSED_CORE);
@@ -77,7 +80,7 @@ private:
         return d;
     }
     void updateRegCong(uint8_t egPort) {
-        if ((regCong[egPort] - 0) < 1e-5) 
+        if (abs(regCong[egPort] - 0) < 1e-5) 
             regCong[egPort] = (_queuesize * 1.0) / _maxsize;
         else {
             regCong[egPort] = (regCong[egPort] * 7.0) / 8 + (_queuesize * 1.0 / _maxsize) * 1 / 8;
@@ -86,6 +89,7 @@ private:
     vector<double> regCong;
     uint8_t _coreId;
     uint8_t _torId;
+    const static uint8_t CE_BITS = 6;
 };
 
 #endif 

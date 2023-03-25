@@ -2,9 +2,8 @@
 
 uint8_t ToR::TOR_ADDED = 0;
 
-ToR::ToR(Logger *logger): Logged("ToR"), _logger(logger) {
-    idTor = TOR_ADDED;
-    ToR::TOR_ADDED++;
+ToR::ToR(uint8_t idTor, Logger *logger): Logged("ToR"), idTor(idTor), _logger(logger) {
+    
     for(int i = 0; i < N_TOR; i++)
         nxtLbTag.push_back(rand() % CoreQueue::N_CORE);
     
@@ -74,7 +73,11 @@ uint8_t ToR::minCongestedCore(uint8_t dstToR) {
     uint8_t minCore = 0;
     uint8_t minCg = CongToLeaf[dstToR][0];
     for (uint8_t i = 1; i < CoreQueue::N_CORE; i++) {
-        if (CongToLeaf[dstToR][i] < minCg) {
+        if (CongToLeaf[dstToR][i] == minCg) {
+            double toss = rand() * 1.0 / RAND_MAX;
+            if (toss < 0.5)
+                minCore = i;
+        } else if (CongToLeaf[dstToR][i] < minCg) {
             minCore = i;
             minCg = CongToLeaf[dstToR][i];
         } 

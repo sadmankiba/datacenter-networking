@@ -59,8 +59,8 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     qlogger->setLogfile(logfile);
     for (int i = 0; i < N_CORE; i++) {    
         for (int j = 0; j < N_LEAF; j++) {
-            qToRCore[i][j] = new CoreQueue(16000000000, 60000, qlogger);
-            qCoreToR[i][j] = new Queue(1200000000, 80000, qlogger);
+            qToRCore[i][j] = new Queue(16000000000, 20000, qlogger);
+            qCoreToR[i][j] = new CoreQueue(i, j, 1200000000, 30000, qlogger);
 
             pToRCore[i][j] = new Pipe(timeFromNs(400));
             pCoreToR[i][j] = new Pipe(timeFromNs(500));
@@ -79,8 +79,8 @@ conga_testbed(const ArgList &args, Logfile &logfile)
 
     for (int i = 0; i < N_LEAF; i++) {    
         for (int j = 0; j < N_SERVER; j++) {
-            qServerToR[i][j] = new Queue(10000000000, 90000, qlogger);
-            qToRServer[i][j] = new Queue(20000000000, 70000, qlogger);
+            qServerToR[i][j] = new Queue(10000000000, 40000, qlogger);
+            qToRServer[i][j] = new Queue(20000000000, 15000, qlogger);
 
             pServerToR[i][j] = new Pipe(timeFromNs(600));
             pToRServer[i][j] = new Pipe(timeFromNs(300));
@@ -100,7 +100,7 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     Logger *logger = new Logger();
     logger->setLogfile(logfile);
     for (int i =0; i < N_LEAF; i++) {
-        tor[i] = new ToR(logger);
+        tor[i] = new ToR(i, logger);
         tor[i]->setName("ToR" + to_string(i));
         logfile.writeName(tor[i]->id, tor[i]->str());
     }
