@@ -48,12 +48,8 @@ public:
     void receivePacket(Packet &pkt) {
         ToR *tor = dynamic_cast<ToR *> ((*(pkt.getRoute()))[pkt.getNextHop() + 1]);
         uint8_t egPort = tor->idTor;
-            
-        if (pkt.getFlag(Packet::ACK) == 0) {
-            if (regCong[egPort] > pkt.vxlan.ce) {
-                pkt.vxlan.ce = (uint8_t) (regCong[egPort] * pow(2, CoreQueue::CE_BITS));
-            }
-        }
+        uint8_t egCe = regCong[egPort] * pow(2, CoreQueue::CE_BITS);
+        pkt.vxlan.ce = (uint8_t) egCe;
         pkt.setFlag(Packet::PASSED_CORE);
         if (_logger) {
             _logger->logTxt("Core " + to_string(_coreId) + "," + to_string(_torId) + ": ");

@@ -27,31 +27,32 @@ void ToR::receivePacket(Packet &pkt) {
 void ToR::asSrcToR(Packet &pkt) {
     pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_TOR_SRC);
     /* pkt.route = ... - dstToR - pServerToR - qServerToR - tcpSink */
-    uint8_t dstToRId = ((ToR *) ((*(pkt.getRoute()))[pkt.getRoute()->size() - 4]))->idTor;
+    ToR *dstTor = dynamic_cast<ToR *> ((*(pkt.getRoute()))[pkt.getRoute()->size() - 4]);
+    uint8_t dstToRId = dstTor->idTor;
     pkt.vxlan.src = idTor;
     pkt.vxlan.dst = dstToRId;
     pkt.vxlan.lbtag = minCongestedCore(dstToRId);
     pkt.vxlan.ce = 0; 
-    
-    if (pkt.getFlag(Packet::ACK) == 1) {        
-        pkt.vxlan.fb_lbtag = nxtLbTag[dstToRId];
-        pkt.vxlan.fb_ce = CongFromLeaf[dstToRId][pkt.vxlan.fb_lbtag];
-        updateNxtLbTag(dstToRId);
-    }
-
+    pkt.vxlan.fb_lbtag = nxtLbTag[dstToRId];
+    pkt.vxlan.fb_ce = CongFromLeaf[dstToRId][pkt.vxlan.fb_lbtag];
+    updateNxtLbTag(dstToRId);
     congaRoute::updateRoute(&pkt, pkt.vxlan.lbtag);
+    if (_logger) {
+        _logger->logTxt("ToR" + to_string(idTor) + ": " + "chosen core " + to_string(pkt.vxlan.lbtag) + "for pkt id " + to_string(pkt.id()) + "\n");
+    }
 }
 
 void ToR::asDstToR(Packet &pkt) {
     pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_TOR_DST);
-    if(pkt.getFlag(Packet::ACK) == 0) {
-        CongFromLeaf[pkt.vxlan.src][pkt.vxlan.lbtag] = pkt.vxlan.ce;
-        if (_logger) _logger->logTxt(congTableDump(true));
-    } else {
-        CongToLeaf[pkt.vxlan.src][pkt.vxlan.lbtag] = pkt.vxlan.ce;
-        if (_logger) _logger->logTxt(congTableDump(false));
-    }
+    CongToLeaf[pkt.vxlan.src][pkt.vxlan.fb_lbtag] = pkt.vxlan.fb_ce;
+
+    CongFromLeaf[pkt.vxlan.src][pkt.vxlan.lbtag] = pkt.vxlan.ce;
+    nxtLbTag[pkt.vxlan.src] = pkt.vxlan.lbtag;
     
+    if (_logger) {
+        _logger->logTxt(congTableDump(true));
+        _logger->logTxt(congTableDump(false));
+    } 
 }
 
 std::string ToR::congTableDump(bool from) {

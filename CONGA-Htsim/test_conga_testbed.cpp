@@ -116,9 +116,9 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     fg->setTrafficLogger(_pktlogger);
     fg->setLogFile(&logfile);
 
-    fg->setTimeLimits(0, timeFromUs(100) - 1);
+    fg->setTimeLimits(0, timeFromUs(200) - 1);
 
-    EventList::Get().setEndtime(timeFromUs(100));
+    EventList::Get().setEndtime(timeFromUs(200));
 }
 
 void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {
