@@ -168,7 +168,7 @@ TcpSrc::receivePacket(Packet &pkt)
 
     // Delayed / reordered ack. Shouldn't happen for simple queues.
     if (seqno < _last_acked) {
-        cout << "ACK from the past: seqno " << seqno << " _last_acked " << _last_acked << endl;
+        // cout << "ACK from the past: seqno " << seqno << " _last_acked " << _last_acked << endl;
         return;
     }
 

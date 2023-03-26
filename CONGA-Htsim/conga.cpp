@@ -71,19 +71,18 @@ std::string ToR::congTableDump(bool from) {
 }
 
 uint8_t ToR::minCongestedCore(uint8_t dstToR) {
-    uint8_t minCore = 0;
     uint8_t minCg = CongToLeaf[dstToR][0];
+    vector<uint8_t> minCores{0};
     for (uint8_t i = 1; i < CoreQueue::N_CORE; i++) {
         if (CongToLeaf[dstToR][i] == minCg) {
-            double toss = rand() * 1.0 / RAND_MAX;
-            if (toss < 0.5)
-                minCore = i;
+            minCores.push_back(i);
         } else if (CongToLeaf[dstToR][i] < minCg) {
-            minCore = i;
             minCg = CongToLeaf[dstToR][i];
+            minCores.clear();
+            minCores.push_back(i);
         } 
     }
-    return minCore;
+    return minCores[rand() % minCores.size()];
 }
 
 void ToR::updateNxtLbTag(uint8_t dstToR) {
