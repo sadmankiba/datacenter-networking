@@ -36,7 +36,7 @@ class TrafficLoggerSimple : public TrafficLogger
         }
     private: 
         std::unordered_map<uint8_t, std::string> _trafficEvMap = {{0, "PKT_ARRIVE"}, {1, "PKT_DEPART"}, {2, "PKT_CREATESEND"}, 
-                {3, "PKT_DROP"}, {4, "PKT_RCVDESTROY"}};
+                {3, "PKT_DROP"}, {4, "PKT_RCVDESTROY"}, {5, "PKT_TOR_SRC"}, {6, "PKT_TOR_DST"}};
 };
 
 class TcpLoggerSimple : public TcpLogger

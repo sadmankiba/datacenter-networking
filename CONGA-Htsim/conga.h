@@ -26,7 +26,7 @@ public:
     std::string congTableDump(bool from);
 
     uint8_t idTor;
-    const static uint8_t N_TOR = 2;
+    const static uint8_t N_TOR = 8;
 private:
     vector<uint8_t> nxtLbTag;
     vector<vector<uint8_t>> CongFromLeaf;

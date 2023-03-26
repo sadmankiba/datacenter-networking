@@ -44,6 +44,10 @@ void ToR::asSrcToR(Packet &pkt) {
 
 void ToR::asDstToR(Packet &pkt) {
     pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_TOR_DST);
+    if (_logger) {
+        _logger->logTxt("Updating ToR" + to_string(idTor) + " CongToLeaf[" + to_string(pkt.vxlan.src) + "," + to_string(pkt.vxlan.fb_lbtag) + "] " \
+            + to_string(CongToLeaf[pkt.vxlan.src][pkt.vxlan.fb_lbtag]) + "->" + to_string(pkt.vxlan.fb_ce) + "\n");
+    }
     CongToLeaf[pkt.vxlan.src][pkt.vxlan.fb_lbtag] = pkt.vxlan.fb_ce;
 
     CongFromLeaf[pkt.vxlan.src][pkt.vxlan.lbtag] = pkt.vxlan.ce;
