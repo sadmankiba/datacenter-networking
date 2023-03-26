@@ -17,7 +17,7 @@ namespace conga {
     // tesdbed configuration
     const int N_CORE = CoreQueue::N_CORE; // 12
     const int N_LEAF = ToR::N_TOR; // 24
-    const int N_SERVER = 1;   // 32, Per leaf
+    const int N_SERVER = 8;   // 32, Per leaf
 
     const uint64_t LEAF_BUFFER = 512000;
     const uint64_t CORE_BUFFER = 1024000;
@@ -168,7 +168,7 @@ void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t 
     
     route_t rfwd, rrev;
     rfwd.push_back(qServerToR[srcToR][sInRack]);
-    rfwd.push_back(pServerToR[src][sInRack]);
+    rfwd.push_back(pServerToR[srcToR][sInRack]);
     if (!ecmp) rfwd.push_back(tor[srcToR]);
     rfwd.push_back(qToRCore[core][srcToR]);
     rfwd.push_back(pToRCore[core][srcToR]);
