@@ -25,6 +25,7 @@ class DataPacket : public Packet
             // This will ID the packet by its last byte.
             p->set(flow, route, size, seqno);
             p->_seqno = seqno;
+            p->unsetFlag(Packet::PASSED_CORE);
             flow._nPackets++;
             return p;
         }

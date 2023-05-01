@@ -90,7 +90,7 @@ TcpSrc::doNextEvent()
 
     // Retransmission timeout.
     else if (_RFC2988_RTO_timeout != 0 && current_ts >= _RFC2988_RTO_timeout) {
-
+        /*
         cout << str() << " at " << timeAsMs(current_ts)
              << " RTO " << timeAsUs(_rto)
              << " MDEV " << timeAsUs(_mdev)
@@ -99,7 +99,7 @@ TcpSrc::doNextEvent()
              << " CWND "<< _cwnd / MSS_BYTES
              << " RTO_timeout " << timeAsMs(_RFC2988_RTO_timeout)
              << " STATE " << _state << endl;
-
+        */
         if (_logger) _logger->logTcp(*this, TcpLogger::TCP_TIMEOUT);
 
         if (_state == FAST_RECOV) {
@@ -154,21 +154,21 @@ TcpSrc::receivePacket(Packet &pkt)
         _state = FINISH;
 
         // Ming added _flowsize
-        cout << setprecision(6) << "Flow " << str() << " " << id << " size " << _flowsize
-             << " start " << lround(timeAsUs(_start_time)) << " end " << lround(timeAsUs(current_ts))
-             << " fct " << timeAsUs(current_ts - _start_time)
-             << " sent " << _highest_sent << " " << _packets_sent - _highest_sent
-             << " tput " << _flowsize * 8000.0 / (current_ts - _start_time)
-             << " rtt " << timeAsUs(_rtt)
-             << " cwnd " << _cwnd
-             << " alpha " << _alpha << endl;
-
+        _flowgen->addFct(timeAsUs(current_ts - _start_time));
+        _flow.logTxt("Flow " + str() + " " + to_string(id) + " size " + to_string(_flowsize)
+             + " start " + to_string(lround(timeAsUs(_start_time))) + " end " + to_string(lround(timeAsUs(current_ts)))
+             + " fct " + to_string(timeAsUs(current_ts - _start_time))
+             + " sent " + to_string(_highest_sent) + " retransmit " + to_string(_packets_sent - _highest_sent)
+             + " tput " + to_string(_flowsize * 8000.0 / (current_ts - _start_time))
+             + " rtt " + to_string(timeAsUs(_rtt))
+             + " cwnd " + to_string(_cwnd)
+             + " alpha " + to_string(_alpha) + "\n");
         return;
     }
 
     // Delayed / reordered ack. Shouldn't happen for simple queues.
     if (seqno < _last_acked) {
-        cout << "ACK from the past: seqno " << seqno << " _last_acked " << _last_acked << endl;
+        // cout << "ACK from the past: seqno " << seqno << " _last_acked " << _last_acked << endl;
         return;
     }
 

@@ -17,7 +17,7 @@ namespace conga {
     // tesdbed configuration
     const int N_CORE = CoreQueue::N_CORE; // 12
     const int N_LEAF = ToR::N_TOR; // 24
-    const int N_SERVER = 1;   // 32, Per leaf
+    const int N_SERVER = 8;   // 32, Per leaf
 
     const uint64_t LEAF_BUFFER = 512000;
     const uint64_t CORE_BUFFER = 1024000;
@@ -25,12 +25,14 @@ namespace conga {
 
     const uint64_t LEAF_SPEED = 10000000000; // 10gbps
     const uint64_t CORE_SPEED = 40000000000; // 40gbps
-    bool ecmp = false;
+    const double LINK_DELAY = 0.1; // 0.1 us
+    
+    uint32_t ecmp = 0;
 
     Queue *qToRCore[N_CORE][N_LEAF];
     Pipe *pToRCore[N_CORE][N_LEAF];
 
-    CoreQueue *qCoreToR[N_CORE][N_LEAF];
+    Queue *qCoreToR[N_CORE][N_LEAF];
     Pipe *pCoreToR[N_CORE][N_LEAF];
 
     Queue *qServerToR[N_LEAF][N_SERVER];
@@ -41,7 +43,6 @@ namespace conga {
         
     ToR *tor[N_LEAF];
 
-    route_t rfwd, rrev;
     void routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst);
     uint8_t simpleHash(uint32_t val1, uint32_t val2) {
         return (val1 + val2) % 256; 
@@ -55,15 +56,38 @@ void
 conga_testbed(const ArgList &args, Logfile &logfile)
 {
     srand(time(NULL));
-    QueueLoggerSimple *qlogger = new QueueLoggerSimple();
-    qlogger->setLogfile(logfile);
+
+    uint32_t doLog = 0;
+    double load = 10;
+    double tms = 10;
+    uint32_t fsKb = 15;
+    uint32_t wl = 0;
+    uint32_t maxflow = -1;
+    double offRt = 0;
+
+    parseInt(args, "ecmp", ecmp);
+    parseInt(args, "log", doLog);
+    parseDouble(args, "load", load);
+    parseDouble(args, "tms", tms);
+    parseInt(args, "fs", fsKb);
+    parseInt(args, "wl", wl);
+    parseInt(args, "mf", maxflow);
+    parseDouble(args, "of", offRt);
+
+    QueueLoggerSimple *qlogger = nullptr; 
+    if (doLog) {
+        qlogger = new QueueLoggerSimple();
+        qlogger->setLogfile(logfile);
+    }
     for (int i = 0; i < N_CORE; i++) {    
         for (int j = 0; j < N_LEAF; j++) {
-            qToRCore[i][j] = new CoreQueue(4000000000, 12000, qlogger);
-            qCoreToR[i][j] = new CoreQueue(8000000000, 18000, qlogger);
+            qToRCore[i][j] = new Queue(CORE_SPEED, CORE_BUFFER, qlogger);
+            qCoreToR[i][j] = ecmp?
+              new Queue(CORE_SPEED, CORE_BUFFER, qlogger) :
+              new CoreQueue(i, j, CORE_SPEED, CORE_BUFFER, qlogger);
 
-            pToRCore[i][j] = new Pipe(timeFromUs(9));
-            pCoreToR[i][j] = new Pipe(timeFromUs(10));
+            pToRCore[i][j] = new Pipe(timeFromUs(LINK_DELAY));
+            pCoreToR[i][j] = new Pipe(timeFromUs(LINK_DELAY));
 
             qToRCore[i][j]->setName("qToRCore" + to_string(i) + "," + to_string(j));
             logfile.writeName(qToRCore[i][j]->id, qToRCore[i][j]->str());
@@ -79,11 +103,11 @@ conga_testbed(const ArgList &args, Logfile &logfile)
 
     for (int i = 0; i < N_LEAF; i++) {    
         for (int j = 0; j < N_SERVER; j++) {
-            qServerToR[i][j] = new Queue(1000000000, 16000, qlogger);
-            qToRServer[i][j] = new Queue(2000000000, 10000, qlogger);
+            qServerToR[i][j] = new Queue(LEAF_SPEED, LEAF_BUFFER, qlogger);
+            qToRServer[i][j] = new Queue(LEAF_SPEED, LEAF_BUFFER, qlogger);
 
-            pServerToR[i][j] = new Pipe(timeFromUs(6));
-            pToRServer[i][j] = new Pipe(timeFromUs(7));
+            pServerToR[i][j] = new Pipe(timeFromUs(LINK_DELAY));
+            pToRServer[i][j] = new Pipe(timeFromUs(LINK_DELAY));
 
             qServerToR[i][j]->setName("qServerToR" + to_string(i) + "," + to_string(j));
             logfile.writeName(qServerToR[i][j]->id, qServerToR[i][j]->str());
@@ -97,41 +121,54 @@ conga_testbed(const ArgList &args, Logfile &logfile)
         }
     }
     
-    Logger *logger = new Logger();
-    logger->setLogfile(logfile);
+    Logger *logger = nullptr;
+    if (doLog) { 
+        logger = new Logger();
+        logger->setLogfile(logfile);
+    }
     for (int i =0; i < N_LEAF; i++) {
-        tor[i] = new ToR(logger);
+        tor[i] = new ToR(i, logger);
         tor[i]->setName("ToR" + to_string(i));
         logfile.writeName(tor[i]->id, tor[i]->str());
     }
 
     DataSource::EndHost eh = DataSource::TCP;
-    linkspeed_bps flowRate = 5000000000; // 5Gb
-    uint32_t avgFlowSize = MSS_BYTES * 10;
-    Workloads::FlowDist flowSizeDist = Workloads::UNIFORM;
+    linkspeed_bps flowRate = load / 100 * CORE_SPEED * N_CORE * N_LEAF;
+    flowRate *= (N_CORE * N_LEAF) / (N_CORE * N_LEAF - 1);
+    uint32_t avgFlowSize = fsKb * 1000;
+    vector<Workloads::FlowDist> v{Workloads::UNIFORM, Workloads::PARETO, Workloads::ENTERPRISE, Workloads::DATAMINING};
+    Workloads::FlowDist flowSizeDist = v[wl];
     FlowGenerator *fg = new FlowGenerator(eh, routeGenerate, flowRate, avgFlowSize, flowSizeDist);
     
-    TrafficLoggerSimple *_pktlogger = new TrafficLoggerSimple();
-    _pktlogger->setLogfile(logfile);
+    TrafficLoggerSimple *_pktlogger = nullptr;
+    if (doLog) {
+        _pktlogger = new TrafficLoggerSimple();
+        _pktlogger->setLogfile(logfile);
+    } 
+
+    fg->setEndhostQueue(LEAF_SPEED, ENDH_BUFFER);
+    if (maxflow > 0) fg->setReplaceFlow(maxflow, offRt);
     fg->setTrafficLogger(_pktlogger);
     fg->setLogFile(&logfile);
 
-    fg->setTimeLimits(0, timeFromUs(4000) - 1);
+    fg->setTimeLimits(0, timeFromMs(tms) - 1);
 
-    EventList::Get().setEndtime(timeFromUs(4000));
+    EventList::Get().setEndtime(timeFromMs(tms));
 }
 
 void conga::routeGenerate(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {
-    src = 0;
-    dst = 1;
-    uint8_t srcToR = src / N_SERVER;
-    uint8_t dstToR = dst / N_SERVER;
-    uint8_t sInRack = src % N_SERVER;
-    uint8_t dInRack = dst % N_SERVER;
+    uint8_t srcToR = (uint8_t) (rand() % N_LEAF);
+    uint8_t dstToR = (uint8_t) (srcToR + 1 + rand() % (N_LEAF - 1)) % N_LEAF;
+    uint8_t sInRack = rand() % N_SERVER;
+    uint8_t dInRack = rand() % N_SERVER;
+    src = srcToR * N_LEAF + sInRack;
+    dst = dstToR * N_LEAF + dInRack;
+    
     uint8_t core = (simpleHash(src, rand())) % N_CORE; // ECMP-like
-    // 4 link testbed
+    
+    route_t rfwd, rrev;
     rfwd.push_back(qServerToR[srcToR][sInRack]);
-    rfwd.push_back(pServerToR[src][sInRack]);
+    rfwd.push_back(pServerToR[srcToR][sInRack]);
     if (!ecmp) rfwd.push_back(tor[srcToR]);
     rfwd.push_back(qToRCore[core][srcToR]);
     rfwd.push_back(pToRCore[core][srcToR]);

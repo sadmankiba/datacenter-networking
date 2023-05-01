@@ -27,7 +27,8 @@ FlowGenerator::FlowGenerator(DataSource::EndHost ehproto,
     _flowTrace(),
     _liveFlows(),
     _pktlogger(nullptr),
-    _tcplogger(nullptr)
+    _tcplogger(nullptr), 
+    _fctSum(0), _nFlows(0)
 {
     double flowsPerSec = _flowRate / (_workload._avgFlowSize * 8.0);
     _avgFlowArrivalTime = timeFromSec(1) / flowsPerSec;
@@ -55,6 +56,10 @@ FlowGenerator::setEndhostQueue(linkspeed_bps qRate,
     _endhostQbuffer = qBuffer;
 }
 
+/*
+* maxFlows : max flow in system
+* offRatio = ratio of idle time / flow time. by default 0. 
+*/
 void
 FlowGenerator::setReplaceFlow(uint32_t maxFlows, 
                               double offRatio)
@@ -63,7 +68,7 @@ FlowGenerator::setReplaceFlow(uint32_t maxFlows,
     _maxFlows = maxFlows;
 
     double avgFCT = (_workload._avgFlowSize * 8.0)/(_flowRate/_maxFlows);
-    _avgFlowArrivalTime = timeFromSec(avgFCT)/_maxFlows;
+    _avgFlowArrivalTime = timeFromSec(avgFCT)/_maxFlows; // remains same
 
     _avgOffTime = llround(timeFromSec(avgFCT) * offRatio / (1 + offRatio));
 }
@@ -102,6 +107,7 @@ FlowGenerator::doNextEvent()
 {
     if (EventList::Get().now() == _endTime) {
         dumpLiveFlows();
+        cout << _nFlows << ", " << (_fctSum * 1.0) / _nFlows;
         return;
     }
 
@@ -246,10 +252,10 @@ FlowGenerator::finishFlow(uint32_t flow_id)
 void
 FlowGenerator::dumpLiveFlows()
 {
-    cout << endl << "Live Flows: " << _liveFlows.size() << endl;
+    // cout << endl << "Live Flows: " << _liveFlows.size() << endl;
     for (auto flow : _liveFlows) {
         DataSource *src = flow.second;
-        src->printStatus();
+        // src->printStatus();
     }
 
     // TODO: temp hack, remove later.

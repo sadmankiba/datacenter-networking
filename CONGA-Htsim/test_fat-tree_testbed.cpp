@@ -192,7 +192,7 @@ fat_tree_testbed(const ArgList &args,
         cfeh = DataSource::D_DCTCP;
     }
 
-    // Calculate background traffic utilization.
+    // Calculate background traffic utilization relative to max uplink traffic sendable from all ToRs at a time
     double bg_flow_rate = Utilization * (TOR_AGG_SPEED * N_SUBTREE * N_AGG * N_UPLINK);
 
     // Adjust for traffic not exiting the ToR.

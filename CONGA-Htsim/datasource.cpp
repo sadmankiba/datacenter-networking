@@ -51,7 +51,8 @@ DataSource::connect(simtime_picosec start_time,
 
     _flow.id = id; // identify the packet flow with the datasource that generated it
 
-    cout << str() << " " << timeAsUs(_start_time) << " " << id << " " << _flowsize << " " << _node_id << " " << _sink->_node_id << endl;
+    _flow.logTxt("Flow start: " + str() + " " + to_string(timeAsUs(_start_time)) + " " 
+        + to_string(id) + " " + to_string(_flowsize) + " " + to_string(_node_id) + " " + to_string(_sink->_node_id) + "\n");
 
     _sink->connect(*this, *_route_rev);
     EventList::Get().sourceIsPending(*this, _start_time);
