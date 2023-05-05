@@ -10,7 +10,6 @@ def rem_storage_one_to_one_throughput():
     plt.bar(x,y2, alpha=0.5, color='red')
     plt.xlabel('Number of apps')
     plt.ylabel('Total throughput (MiBps)')
-    plt.show()
 
 def rem_storage_one_to_one_util():
     x = np.arange(4)
@@ -68,8 +67,22 @@ def storage_many_one_to_one_nw_bw():
     plt.axhline(y=26.2, color='r', linestyle='--')
     # Add a text above the horizontal line
     plt.text(0.5, 26.2, 'isolated', ha='center', va='bottom', color='r')  
-   
+
+def nw_one_to_one():
+    x = np.arange(4)
+    y1 = np.array([26.2, 30.5 / 2, 21 / 3, 21 / 4])
+    y2 = np.array([26.2, 30.5, 21, 21])
+    plt.xticks([0, 1, 2, 3], ['1', '2', '4', '8'])
+    plt.bar(x, y1, color='tab:blue')
+    plt.bar(x,y2, alpha=0.5, color='cornflowerblue')
+    plt.xlabel('Number of flows')
+    plt.ylabel('Total throughput (Gbps)')
+    plt.legend(labels=['per-flow', 'total'])
+
+
 
 if __name__ == '__main__':
-    storage_many_one_to_one_nw_bw()
+    # Set font size 
+    plt.rcParams.update({'font.size': 14})
+    nw_one_to_one()
     plt.show()
