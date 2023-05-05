@@ -51,15 +51,25 @@ def storage_many_one_to_one_nw_one():
     # Set legend
     plt.legend(labels=['in-contention', 'non-contention'])
 
+
 # Nw bandwidth in contention (Gbps)
-# 18.1
-# 16.6
-# 16.7
-# 17.5
-# 19.3
 def storage_many_one_to_one_nw_bw():
-    pass
+    # Set font size 
+    plt.rcParams.update({'font.size': 14})
+    x = np.arange(4)
+    y = np.array([18.1, 16.6, 17.5, 19.3])
+    plt.xticks([0, 1, 2, 3], ['1', '2', '4', '8'])
+    plt.bar(x, y, color='tab:blue', width=0.5)
+    plt.xlabel('Number of T-apps')
+    plt.ylabel('Nw app throughput (Gbps)')
+    # Set yticks
+    plt.yticks([5, 10, 15, 20, 25])
+    # Plot a horizontal dashed line
+    plt.axhline(y=26.2, color='r', linestyle='--')
+    # Add a text above the horizontal line
+    plt.text(0.5, 26.2, 'isolated', ha='center', va='bottom', color='r')  
+   
 
 if __name__ == '__main__':
-    storage_many_one_to_one_nw_one()
+    storage_many_one_to_one_nw_bw()
     plt.show()
