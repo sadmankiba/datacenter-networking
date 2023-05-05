@@ -79,10 +79,28 @@ def nw_one_to_one():
     plt.ylabel('Total throughput (Gbps)')
     plt.legend(labels=['per-flow', 'total'])
 
-
+def l_app_lat():
+    # 1 (no nw app)	61	55
+    # 1	174	276
+    # 2	230	350
+    # 3	240	350
+    # 4	265	385
+    # 8	310	430
+    x = np.arange(5)
+    y = np.array([61, 174, 230, 265, 310])
+    # Add error bar on y
+    yerr = np.array([0, 276 - 174, 350 - 230, 350 - 265, 430 - 310])
+    # Plot y as bar and yerror as a cap line
+    plt
+    plt.errorbar(x, y, yerr=yerr, fmt='o', color='k', capsize=5, zorder=1)
+    plt.xticks([0, 1, 2, 3, 4], ['isolated', '1', '2', '4', '8'])
+    # draw the bar plot on top of the error bars
+    plt.bar(x, y, color='tab:blue', width=0.5, zorder=2)
+    plt.xlabel('Number of L-apps')
+    plt.ylabel('Latency (us)')
 
 if __name__ == '__main__':
     # Set font size 
     plt.rcParams.update({'font.size': 14})
-    nw_one_to_one()
+    l_app_lat()
     plt.show()
