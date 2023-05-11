@@ -114,6 +114,69 @@ def t_app_many_util_nw():
      # Set yticks
     plt.yticks([20, 40, 60, 80, 100])
 
+def t_app_bw_nw_many():
+    # 750
+    # 701
+    # 181
+    # 145
+    x = np.arange(4)
+    y = np.array([750, 701, 181, 145])
+    plt.xticks([0, 1, 2, 3], ['1', '2', '3', '4'])
+    plt.bar(x, y, color='tab:blue', width=0.5)
+    plt.xlabel('Number of Nw apps')
+    plt.ylabel('Total throughput (MBps)')
+
+def t_app_nw_many_bw():
+    # 18.1	0
+    # 13.6	11.4
+    # 7	7.1
+    # 5.25	5.3
+    x = np.arange(4)
+    y1 = np.array([18.1, 13.6, 7, 5.25])
+    y2 = np.array([0, 11.4, 7.1, 5.3])
+
+    # Plot bar chart of y1 and y2 side-by-side with x as x-axis 
+    plt.bar(x - 0.2, y1, color = 'tab:blue', width = 0.4)
+    plt.bar(x + 0.2, y2, color = 'tab:orange', width = 0.4)
+
+    # Add xticks on the middle of the group bars
+    plt.xlabel('Number of network apps')
+    plt.ylabel('Avg bandwidth (Gbps)')
+    plt.xticks([0, 1, 2, 3], ['1', '2', '3', '4'])
+
+    # Set legend
+    plt.legend(labels=['in-contention', 'non-contention'])
+
+def t_app_util_nw_many():
+    # bar chart in groups of 2
+    # Sender core util in contention	Sender core util in non-contention	Receiver core util in contention	Receiver core util in non-contention
+    # 95%		95%	
+    # 87%	47%	74%	68%
+    # 57%	24%	26%	33%
+    # 41%	18%	20%	22%
+    x = np.arange(9)
+    y1 = np.array([0, 47, 24, 18, 0, 0, 68, 33, 22])
+    y2 = np.array([95, 87, 57, 41, 0, 95, 74, 26, 20])
+
+    # Plot bar chart of y1 and y2 side-by-side with x as x-axis 
+    plt.bar(x - 0.2, y1, color = 'tab:purple', width = 0.4)
+    plt.bar(x + 0.2, y2, color = 'tab:olive', width = 0.4)
+
+    # Add xticks on the middle of the group bars
+    # Set xlabel position slightly below 
+    plt.xlabel('Number of network apps', y=-20)
+    # Add text below x-axis
+    plt.text(0.5, -15, 'Sender', ha='center', va='bottom', color='slategrey')
+    plt.text(7.5, -15, 'Receiver', ha='center', va='bottom', color='slategrey')
+    plt.ylabel('CPU Utilization (%)')
+    plt.xticks([0, 1, 2, 3, 4, 5, 6, 7, 8], ['1', '2', '3', '4', '', '1', '2', '3', '4'])
+
+    # Set legend
+    # Set legend position at top
+    plt.legend(labels=['unshared core', 'shared core'], loc='upper center', bbox_to_anchor=(0.5, 1.15), ncol=2)
+     # Set yticks
+    plt.yticks([20, 40, 60, 80, 100])
+
 def l_app_lat():
     # 1 (no nw app)	61	55
     # 1	174	276
@@ -181,42 +244,9 @@ def l_app_nw_many_thr():
     plt.xlabel('Number of Nw apps')
     plt.ylabel('Total throughput (Gbps)')
 
-def t_app_many_nw_one_t_bw():
-    # 750
-    # 701
-    # 181
-    # 145
-    x = np.arange(4)
-    y = np.array([750, 701, 181, 145])
-    plt.xticks([0, 1, 2, 3], ['1', '2', '3', '4'])
-    plt.bar(x, y, color='tab:blue', width=0.5)
-    plt.xlabel('Number of Nw apps')
-    plt.ylabel('Total throughput (MBps)')
-
-def t_app_many_nw_thr():
-    # 18.1	0
-    # 13.6	11.4
-    # 7	7.1
-    # 5.25	5.3
-    x = np.arange(4)
-    y1 = np.array([18.1, 13.6, 7, 5.25])
-    y2 = np.array([0, 11.4, 7.1, 5.3])
-
-    # Plot bar chart of y1 and y2 side-by-side with x as x-axis 
-    plt.bar(x - 0.2, y1, color = 'tab:blue', width = 0.4)
-    plt.bar(x + 0.2, y2, color = 'tab:orange', width = 0.4)
-
-    # Add xticks on the middle of the group bars
-    plt.xlabel('Number of network apps')
-    plt.ylabel('Avg bandwidth (Gbps)')
-    plt.xticks([0, 1, 2, 3], ['1', '2', '3', '4'])
-
-    # Set legend
-    plt.legend(labels=['in-contention', 'non-contention'])
-
 
 if __name__ == '__main__':
     # Set font size 
     plt.rcParams.update({'font.size': 14})
-    t_app_many_nw_util()
+    t_app_util_nw_many()
     plt.show()
