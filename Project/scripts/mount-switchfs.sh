@@ -1,0 +1,1 @@
+sshfs sadman@192.168.30.3:/root/ ~/switch-root/

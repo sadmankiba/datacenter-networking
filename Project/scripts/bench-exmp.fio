@@ -1,0 +1,10 @@
+[job1]
+rw=randread
+direct=1
+size=${SIZE}
+bs=4k
+ioengine=libaio
+iodepth=32
+fsync=1
+# FILENAME=/dev/nvme0n2p3 etc.
+filename=${FILENAME}

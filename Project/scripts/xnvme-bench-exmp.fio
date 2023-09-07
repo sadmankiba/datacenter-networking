@@ -1,0 +1,12 @@
+[job1]
+rw=randread
+direct=1
+size=${SIZE}
+bs=4k
+ioengine=xnvme
+iodepth=32
+thread=1
+xnvme_async=libaio
+fsync=1
+# FILENAME=/dev/nvme0n2p3 etc.
+filename=${FILENAME}

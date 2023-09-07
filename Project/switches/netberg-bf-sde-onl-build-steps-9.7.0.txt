@@ -1,0 +1,118 @@
+0. Please install an updated ONL image - ftp://ftp.netbergtw.com/Aurora_710/ONL-move-to-4.19_ONL-OS9_2021-04-09.1005-30571c5_AMD64_INSTALLED_INSTALLER
+
+Don't forget to check the md5sum file. 
+
+1. Update apt
+
+ sudo apt update --allow-unauthenticated --allow-insecure-repositories
+
+2. Check the kernel version with "uname -a" and get its sources from our FTP. E.g. linux-4.19.81.tar.gz
+
+Untar kernel sources linux-4.19.81.tar.gz to /usr/src then make a symbolic link:
+
+ sudo ln -s /usr/src/linux-4.19.81 /lib/modules/4.19.81-OpenNetworkLinux/build
+
+3. Build the SDE
+
+Copy  bf-sde-9.7.0.tgz and bf-platforms-netberg-XXX-bsp-9.7.0_YYYYMMDD.tgz to /sde
+
+ cd /sde
+
+Extract SDE sources
+ 
+ tar -vxzf bf-sde-9.7.0.tgz
+ tar -vxzf bf-netberg-aurora-710-750-bsp-9.7.0-211214.tgz
+
+Installing OS dependencies
+
+Building and installing SDE dependencies 
+
+ ./install-p4studio-dependencies.sh
+ cd /sde/bf-sde-9.7.0/p4studio/                                                          
+ sudo ./p4studio dependencies install  
+
+Be patient. It takes some time (approx. 1.5 hours).
+
+If you see the following messages
+
+ Connecting to www.kernel.org (www.kernel.org)|145.40.73.55|:443... connected.
+ WARNING: The certificate of ‘www.kernel.org’ is not trusted.
+ WARNING: The certificate of ‘www.kernel.org’ has expired.
+
+disable checking certificates by wget:
+
+ echo "check-certificate = no" > ~/.wgetrc
+
+Building the SDE itself 
+
+ root@localhost:/sde/bf-sde-9.7.0/p4studio# ./p4studio interactive
+ Do you want to install dependencies? [Y/n]: n
+ Do you want to build switch-p4-16? [y/N]: y
+ Please provide the profile to build switch with (x1_tofino, x2_tofino, g1_tofino, y1_tofino2, y2_tofino2, y3_tofino2, z2_tofino2) [x1_tofino]: x2_tofino
+ Do you want to build bf-diags? [y/N]:
+ Do you want to build P4-14 examples? [y/N]:
+ Do you want to build P4-16 examples? [Y/n]:
+ Please provide architecture for bf-diags and p4-examples (tofino, tofino2, tofino2m, tofino2h, all) [tofino]: tofino
+ Do you want to build for HW? [y/N]: y                      
+ Do you want to build BSP? [y/N]: y                          
+ Please provide the path to BSP: /sde/netberg-aurora-610-bsp-9.7.0-211203.tgz
+ Do you want to use custom kernel headers? [y/N]:
+ Do you want to enable P4Runtime? [y/N]:
+
+ Created profile:
+ global-options:
+   asic: true
+ features:
+   bf-platforms:
+     bsp-path: /sde/netberg-aurora-610-bsp-9.7.0-211203.tgz
+   p4-examples:
+   - p4-16-programs
+   switch:
+     profile: x2_tofino
+ architectures:
+ - tofino2
+ dependencies:
+   source-packages: []
+
+ Do you want to write it to a file? [y/N]: y
+ Please provide the profile filename - [Example:profiles/my-profile.yaml]: profiles/my-profile.yaml
+ Do you want to continue building SDE? [y/N]: y
+
+Is also takes some time (aprx. 30 min).
+
+Further builds can be started as follows: 
+
+ ./p4studio profile apply ./profiles/my-profile.yaml
+
+4. Basic checking before run
+
+Be sure that environment variables are set: 
+
+ export buildNumber=9.7.0
+ export SDE=/sde/bf-sde-$buildNumber
+ export SDE_INSTALL=$SDE/install
+ export PATH=$SDE_INSTALL/bin:$PATH
+
+ sudo $SDE_INSTALL/bin/bf_kdrv_mod_load $SDE_INSTALL
+
+Under the root: ./run_switchd.sh -p switch
+
+ bfshell> ucli                                                                          
+ Starting UCLI from bf-shell                                                            
+ Cannot read termcap database;                                                          
+ using dumb terminal settings.                                                          
+ bf-sde> pm                                                                              
+ bf-sde.pm> show -a                                                                             
+ -----+----+---+----+-------+----+--+--+---+---+---+--------+----------------+----------------+-
+ PORT |MAC |D_P|P/PT|SPEED  |FEC |AN|KR|RDY|ADM|OPR|LPBK    |FRAMES RX       |FRAMES TX       |E
+ -----+----+---+----+-------+----+--+--+---+---+---+--------+----------------+----------------+-
+ 1/0  |23/1|133|3/ 5|-------|----|--|--|NO |---|---|--------|----------------|----------------|-
+ 2/0  |23/0|132|3/ 4|-------|----|--|--|NO |---|---|--------|----------------|----------------|-
+ 3/0  |23/3|135|3/ 7|-------|----|--|--|NO |---|---|--------|----------------|----------------|-
+ 4/0  |23/2|134|3/ 6|-------|----|--|--|NO |---|---|--------|----------------|----------------|-
+ 5/0  |22/1|141|3/13|-------|----|--|--|NO |---|---|--------|----------------|----------------|-
+ 6/0  |22/0|140|3/12|-------|----|--|--|NO |---|---|--------|----------------|----------------|-
+ 7/0  |22/3|143|3/15|-------|----|--|--|NO |---|---|--------|----------------|----------------|-
+ 8/0  |22/2|142|3/14|-------|----|--|--|NO |---|---|--------|----------------|----------------|-
+...
+
