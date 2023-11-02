@@ -1,6 +1,6 @@
-# Nw Adv Projects
+# Datacenter Networking
 
-Assignments and final project of UW-Madison CS740 course. 
+Projects on datacenter networking done as part of UW-Madison CS740 course. 
 
 `TCP-SW-DPDK/` : Implements TCP Sliding Window Algorithm in DPDK.<br>
 `CONGA-Htsim/` : Implements CONGA congestion control for a DC network in Htsim.<br><br>
